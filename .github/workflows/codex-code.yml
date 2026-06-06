@@ -1,0 +1,22 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: codex-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codex-review:
+    uses: praetorian-inc/public-workflows/.github/workflows/codex-code.yml@9391f462483f0ca025fbbb57bfb0f9f9561e1b6a  # v2.6.6
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      model: "gpt-5.5"
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
