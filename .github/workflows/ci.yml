@@ -1,0 +1,40 @@
+name: skills-drift-check
+
+# Fails the PR if the committed generated skill dirs (.claude/skills, .gemini/skills,
+# .agents/skills) are out of sync with the canonical source (.agentsmesh/skills).
+# This is what makes "commit the generated artifacts" safe: the canonical dir is the
+# single source of truth, and this gate guarantees the mirrors were regenerated and
+# never hand-edited.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Verify generated skills are in sync with canonical source
+        run: npx -y agentsmesh@0.22.0 generate --check

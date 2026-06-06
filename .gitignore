@@ -1,0 +1,6 @@
+node_modules/
+agentsmesh.local.yaml
+.agentsmeshcache
+.agentsmesh/cache/
+.agentsmesh/.lock
+*.log

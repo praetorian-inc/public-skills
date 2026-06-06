@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://unpkg.com/agentsmesh@0.22.0/schemas/agentsmesh.json
+# Canonical skills live in .agentsmesh/skills/ — EDIT THERE ONLY.
+# Generated dirs (.claude/skills, .gemini/skills, .agents/skills) are committed artifacts;
+# CI runs `agentsmesh generate --check` to fail any drift. Never hand-edit generated files.
+version: 1
+targets:
+  - claude-code   # -> .claude/skills/   (Claude reviewer)
+  - gemini-cli    # -> .gemini/skills/ + .agents/skills/  (Gemini reviewer + Codex auto-scan)
+features:
+  - skills
