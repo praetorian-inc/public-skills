@@ -1,0 +1,115 @@
+name: graphify-skill-sync
+
+# Keeps the vendored graphify skill (.agentsmesh/skills/graphify + generated mirrors)
+# in sync with upstream `graphifyy` releases on PyPI. Runs weekly (and on demand):
+# installs the latest graphify, copies its packaged skill into the canonical source,
+# regenerates the .claude/.agents/.gemini mirrors with agentsmesh, and — only if
+# anything changed — opens/updates a single PR pinned to the graphify version used.
+#
+# Why a PR and not a direct push: the graphify skill is upstream-owned, so changes
+# should be reviewed (the frontmatter/body can shift between releases). The job runs
+# `agentsmesh generate --check` inline so the diff is self-validated before the PR.
+#
+# NOTE: PRs opened with the default GITHUB_TOKEN do NOT trigger the separate
+# `skills-drift-check` workflow (GitHub suppresses workflow events from GITHUB_TOKEN).
+# The inline --check below covers it. If you want the standalone gate to also run on
+# the PR, swap `token:` for a PAT or GitHub App token with `contents:write,pull-requests:write`.
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: graphify-skill-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Install latest graphify (pipx)
+        run: |
+          # INTENTIONALLY UNPINNED. This job's entire purpose is to detect when a NEW
+          # upstream graphify release ships an updated skill — pinning would freeze it
+          # into a permanent no-op. `graphifyy` is the legitimate PyPI name for the
+          # 61k-star safishamsi/graphify (the single-y `graphify` does not exist on
+          # PyPI — any "typosquat" flag is a false positive).
+          #
+          # Trust model for running latest 3rd-party code here: (1) the job only holds a
+          # GITHUB_TOKEN scoped to THIS repo, no other secrets; (2) harden-runner audits
+          # egress; (3) output is reviewed via a PR before merge — nothing auto-applies.
+          # Consumers that just need a working graphify (guard-core CI, the monorepo
+          # Makefile) DO pin the version; only this upstream-tracking job floats.
+          pipx install graphifyy
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync upstream skill into canonical source
+        id: sync
+        run: |
+          set -euo pipefail
+          # Runner is ephemeral, so installing into the real $HOME is fine.
+          graphify install --platform claude >/dev/null
+          SRC="$HOME/.claude/skills/graphify"
+          [ -f "$SRC/SKILL.md" ] || { echo "::error::graphify skill not found at $SRC"; exit 1; }
+          rm -rf .agentsmesh/skills/graphify
+          mkdir -p .agentsmesh/skills/graphify
+          cp -R "$SRC/." .agentsmesh/skills/graphify/
+          # `graphify --version` prints "graphify 0.8.35", not a bare version — extract
+          # just the semver so the PR title/commit message stay clean (per review).
+          VERSION="$(graphify --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          [ -n "$VERSION" ] || VERSION="unknown"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Synced canonical graphify skill from graphifyy $VERSION"
+
+      - name: Regenerate mirrors
+        run: npx -y agentsmesh@0.22.0 generate
+
+      - name: Validate mirrors in sync (inline drift gate)
+        run: npx -y agentsmesh@0.22.0 generate --check
+
+      - name: Open/update sync PR
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: graphify-skill-sync
+          delete-branch: true
+          base: main
+          commit-message: "chore: sync graphify skill (${{ steps.sync.outputs.version }})"
+          title: "chore: sync graphify skill → ${{ steps.sync.outputs.version }}"
+          body: |
+            Automated sync of the vendored **graphify** skill from upstream PyPI (`graphifyy`).
+
+            - Source: `${{ steps.sync.outputs.version }}`
+            - Canonical updated: `.agentsmesh/skills/graphify/`
+            - Mirrors regenerated: `.claude/`, `.agents/`, `.gemini/` (via `agentsmesh generate`)
+            - Inline `agentsmesh generate --check` passed.
+
+            Review the frontmatter/body diff before merging — graphify's skill content
+            can change between releases.
+          labels: |
+            automated
+            graphify
