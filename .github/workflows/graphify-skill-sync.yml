@@ -53,6 +53,17 @@ jobs:
 
       - name: Install latest graphify (pipx)
         run: |
+          # INTENTIONALLY UNPINNED. This job's entire purpose is to detect when a NEW
+          # upstream graphify release ships an updated skill — pinning would freeze it
+          # into a permanent no-op. `graphifyy` is the legitimate PyPI name for the
+          # 61k-star safishamsi/graphify (the single-y `graphify` does not exist on
+          # PyPI — any "typosquat" flag is a false positive).
+          #
+          # Trust model for running latest 3rd-party code here: (1) the job only holds a
+          # GITHUB_TOKEN scoped to THIS repo, no other secrets; (2) harden-runner audits
+          # egress; (3) output is reviewed via a PR before merge — nothing auto-applies.
+          # Consumers that just need a working graphify (guard-core CI, the monorepo
+          # Makefile) DO pin the version; only this upstream-tracking job floats.
           pipx install graphifyy
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -67,9 +78,12 @@ jobs:
           rm -rf .agentsmesh/skills/graphify
           mkdir -p .agentsmesh/skills/graphify
           cp -R "$SRC/." .agentsmesh/skills/graphify/
-          VERSION="$(graphify --version)"
+          # `graphify --version` prints "graphify 0.8.35", not a bare version — extract
+          # just the semver so the PR title/commit message stay clean (per review).
+          VERSION="$(graphify --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          [ -n "$VERSION" ] || VERSION="unknown"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Synced canonical graphify skill from $VERSION"
+          echo "Synced canonical graphify skill from graphifyy $VERSION"
 
       - name: Regenerate mirrors
         run: npx -y agentsmesh@0.22.0 generate
