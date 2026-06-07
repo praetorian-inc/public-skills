@@ -1,0 +1,28 @@
+name: Gemini PR Assistant
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: gemini-${{ github.event.pull_request.number || github.ref }}
+  # Only a real review request may cancel an in-progress review. Every
+  # pull_request_review_comment shares this per-PR group; concurrency is evaluated
+  # at run creation, BEFORE the reusable's preflight @mention gate skips a stray
+  # comment — so an unconditional `true` lets any inline comment kill a running
+  # review and leave none. Cancel only for PR open/ready or an explicit @gemini.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || contains(github.event.comment.body, '@gemini') }}
+
+jobs:
+  gemini-review:
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event_name != 'pull_request_review_comment' || contains(github.event.comment.body, '@gemini'))
+    uses: praetorian-inc/public-workflows/.github/workflows/gemini-code.yml@9391f462483f0ca025fbbb57bfb0f9f9561e1b6a  # v2.6.6
+    permissions:
+      contents: read
+      pull-requests: write
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

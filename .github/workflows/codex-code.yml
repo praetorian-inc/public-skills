@@ -1,0 +1,27 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: codex-${{ github.event.pull_request.number || github.ref }}
+  # Only a real review request may cancel an in-progress review. Every
+  # pull_request_review_comment shares this per-PR group; concurrency is evaluated
+  # at run creation, BEFORE the reusable's preflight @mention gate skips a stray
+  # comment — so an unconditional `true` lets any inline comment kill a running
+  # review and leave none. Cancel only for PR open/ready or an explicit @codex.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || contains(github.event.comment.body, '@codex') }}
+
+jobs:
+  codex-review:
+    uses: praetorian-inc/public-workflows/.github/workflows/codex-code.yml@9391f462483f0ca025fbbb57bfb0f9f9561e1b6a  # v2.6.6
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      model: "gpt-5.5"
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
