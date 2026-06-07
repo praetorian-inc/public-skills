@@ -85,6 +85,44 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Synced canonical graphify skill from graphifyy $VERSION"
 
+      - name: Pin install commands to synced version (+ drift guard)
+        env:
+          VERSION: ${{ steps.sync.outputs.version }}
+        run: |
+          set -euo pipefail
+          # graphify's packaged skill ships UNPINNED installs — not only in SKILL.md
+          # (`uv tool install --upgrade graphifyy`, `pip install graphifyy`) but also in
+          # reference files loaded for sub-flows (e.g. references/add-watch.md ships
+          # `pip install 'graphifyy[video]'` for `/graphify add <video URL>`). Re-pin
+          # EVERY install across the whole skill tree to the exact version this sync
+          # pulled, so consumers never auto-install an unreviewed release — matching the
+          # version-pin policy in public-workflows graphify-graph.yml and the
+          # praetorian-claude monorepo Makefile. The `uv tool run graphifyy` detection
+          # line is intentionally left as-is: it prefers an existing install and is a
+          # benign no-op otherwise (uv errors on the graphifyy/graphify executable-name
+          # mismatch), so it is not an install vector.
+          DIR=.agentsmesh/skills/graphify
+          if [ "$VERSION" = "unknown" ]; then
+            echo "::error::could not determine synced graphify version; refusing to ship an unpinned skill"; exit 1
+          fi
+          # Pin across all markdown in the skill tree (SKILL.md + references/*).
+          while IFS= read -r -d '' F; do
+            sed -i -E "s/uv tool install --upgrade graphifyy/uv tool install graphifyy==${VERSION}/g" "$F"
+            sed -i -E "s/(pip install )graphifyy([^=[])/\1graphifyy==${VERSION}\2/g" "$F"
+            # extras form, e.g. graphifyy[gemini] / graphifyy[video] followed by a quote
+            sed -i -E "s/graphifyy(\[[a-z]+\])('|\")/graphifyy\1==${VERSION}\2/g" "$F"
+          done < <(find "$DIR" -type f -name '*.md' -print0)
+          # Drift guard: after pinning, EVERY graphifyy install across the tree must carry
+          # ==X.Y.Z. If upstream changed an install line's shape so a sed above missed it
+          # (or added a new install in a new file), fail loudly so a human updates this
+          # step instead of silently shipping unpinned.
+          if grep -rnE '(uv tool install|pip install)[^#]*graphifyy' "$DIR" \
+               | grep -vE 'graphifyy(\[[a-z]+\])?==[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::unpinned graphifyy install remains after pinning — upstream install shape changed; update graphify-skill-sync.yml"
+            exit 1
+          fi
+          echo "Pinned graphifyy installs across $DIR to ==${VERSION}"
+
       - name: Regenerate mirrors
         run: npx -y agentsmesh@0.22.0 generate
 
@@ -106,6 +144,7 @@ jobs:
             - Source: `${{ steps.sync.outputs.version }}`
             - Canonical updated: `.agentsmesh/skills/graphify/`
             - Mirrors regenerated: `.claude/`, `.agents/`, `.gemini/` (via `agentsmesh generate`)
+            - Install commands re-pinned to `graphifyy==${{ steps.sync.outputs.version }}` (drift guard passed)
             - Inline `agentsmesh generate --check` passed.
 
             Review the frontmatter/body diff before merging — graphify's skill content

@@ -82,13 +82,18 @@ fi
 # 3. Fall back to python3
 if [ -z "$PYTHON" ]; then PYTHON="python3"; fi
 if ! "$PYTHON" -c "import graphify" 2>/dev/null; then
+    # Version PINNED for supply-chain hygiene (never --upgrade/latest): the install
+    # must use a reviewed release. Kept in lockstep with the graphify-version pin in
+    # public-workflows graphify-graph.yml and the praetorian-claude monorepo Makefile.
+    # graphify-skill-sync.yml re-applies this pin (to the synced version) on each
+    # upstream sync and fails if an unpinned graphifyy install slips through.
     if command -v uv >/dev/null 2>&1; then
-        uv tool install --upgrade graphifyy -q 2>&1 | tail -3
+        uv tool install graphifyy==0.8.35 -q 2>&1 | tail -3
         _UV_PY=$(uv tool run graphifyy python -c "import sys; print(sys.executable)" 2>/dev/null)
         if [ -n "$_UV_PY" ]; then PYTHON="$_UV_PY"; fi
     else
-        "$PYTHON" -m pip install graphifyy -q 2>/dev/null \
-          || "$PYTHON" -m pip install graphifyy -q --break-system-packages 2>&1 | tail -3
+        "$PYTHON" -m pip install graphifyy==0.8.35 -q 2>/dev/null \
+          || "$PYTHON" -m pip install graphifyy==0.8.35 -q --break-system-packages 2>&1 | tail -3
     fi
 fi
 # Write interpreter path for all subsequent steps (persists across invocations)
@@ -150,7 +155,7 @@ Skip this step entirely if `detect` returned zero `video` files. When the corpus
 This step has two parts: **structural extraction** (deterministic, free) and **semantic extraction** (LLM, costs tokens).
 
 **Before dispatching subagents:** check whether `GEMINI_API_KEY` or `GOOGLE_API_KEY` is set. If neither is set, print this one-liner to the user:
-> Tip: set `GEMINI_API_KEY` or `GOOGLE_API_KEY` to use Gemini for semantic extraction (`pip install 'graphifyy[gemini]'`).
+> Tip: set `GEMINI_API_KEY` or `GOOGLE_API_KEY` to use Gemini for semantic extraction (`pip install 'graphifyy[gemini]==0.8.35'`).
 
 Print it once, then continue. If `GEMINI_API_KEY` or `GOOGLE_API_KEY` IS set, use `graphify.llm.extract_corpus_parallel(files, backend="gemini")` for semantic extraction instead of dispatching Claude subagents. The default Gemini model is `gemini-3-flash-preview`; set `GRAPHIFY_GEMINI_MODEL` or pass `--model` in headless CLI flows to override it.
 
