@@ -9,12 +9,7 @@ on:
 
 concurrency:
   group: claude-${{ github.event.pull_request.number || github.ref }}
-  # Only a real review request may cancel an in-progress review. Every
-  # pull_request_review_comment shares this per-PR group; concurrency is evaluated
-  # at run creation, BEFORE the reusable's preflight @mention gate skips a stray
-  # comment — so an unconditional `true` lets any inline comment kill a running
-  # review and leave none. Cancel only for PR open/ready or an explicit @claude.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || contains(github.event.comment.body, '@claude') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}  # stray review comments must not cancel an in-progress review
 
 jobs:
   claude-code-action:
