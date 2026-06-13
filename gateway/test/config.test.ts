@@ -30,8 +30,20 @@ describe("loadConfig", () => {
     expect(cfg).toEqual({
       catalog: { root: "./.agentsmesh" },
       search: { ranker: "keyword" },
+      sandbox: { memoryLimitMb: 128, timeoutMs: 5000 },
       secrets: { provider: "env" },
     });
+  });
+
+  it("defaults sandbox limits and accepts overrides (WS-1 §6.1)", () => {
+    expect(loadConfig(writeConfig("sbx-def.yaml", `{}\n`)).sandbox).toEqual({
+      memoryLimitMb: 128,
+      timeoutMs: 5000,
+    });
+    const over = loadConfig(
+      writeConfig("sbx-over.yaml", `sandbox:\n  memoryLimitMb: 64\n  timeoutMs: 2000\n`),
+    );
+    expect(over.sandbox).toEqual({ memoryLimitMb: 64, timeoutMs: 2000 });
   });
 
   it("applies defaults when sections are omitted", () => {

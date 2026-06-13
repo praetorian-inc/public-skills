@@ -50,6 +50,14 @@ const ConfigSchema = z.object({
         .optional(),
     })
     .default({}),
+  // WS-1 (§6.1): resource caps for the run_code isolate. Optional with defaults
+  // (empty config stays valid); operators can tune the memory/timeout ceiling.
+  sandbox: z
+    .object({
+      memoryLimitMb: z.number().int().positive().default(128),
+      timeoutMs: z.number().int().positive().default(5000),
+    })
+    .default({}),
   secrets: z
     .object({
       provider: z.enum(["env", "1password"]).default("env"),

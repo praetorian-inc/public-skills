@@ -68,7 +68,12 @@ async function main(): Promise<void> {
 
   // The sandbox builds its capability bridge from the SAME index + secrets the
   // `execute` path uses; isolated-vm is lazy-imported on first run_code call.
-  const sandbox = new Sandbox({ index, secrets });
+  // Resource caps come from config.sandbox (defaulted).
+  const sandbox = new Sandbox({
+    index,
+    secrets,
+    limits: { memoryLimitMb: config.sandbox.memoryLimitMb, timeoutMs: config.sandbox.timeoutMs },
+  });
 
   const server = createServer({
     index,
