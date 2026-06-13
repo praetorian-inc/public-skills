@@ -135,6 +135,82 @@
       "schemaHash": "7d65aeed3fd6e0a16e64997f4e7cafb944df710cb3b2e2389f48d35242485b91"
     },
     {
+      "id": "linear.create_comment",
+      "name": "Create Linear Comment",
+      "description": "Create a comment on a Linear issue",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID or identifier"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Comment content (Markdown)"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Parent comment ID (for replies)"
+          }
+        },
+        "required": [
+          "issueId",
+          "body"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "comment": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "body",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "comment",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createComment",
+      "schemaHash": "f0a9a75e6755c5807cc78907c0de432dde05766bc0c64b274329c67a2de2d0e1"
+    },
+    {
       "id": "linear.create_cycle",
       "name": "Create Linear Cycle",
       "description": "Create a new cycle in Linear",
@@ -931,6 +1007,74 @@
       "schemaHash": "71aab25c8012f6670b81de8c6554ae1bc63e2bdd7cfd81d54861a35cd9b29770"
     },
     {
+      "id": "linear.find_user",
+      "name": "Find Linear User",
+      "description": "Find a specific user in Linear workspace",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "User ID, email, or name to search"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "admin": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#findUser",
+      "schemaHash": "1209af3c8f301592ea3957b0b70bb79addba85e8afb06ad7421d2a2f9a68820c"
+    },
+    {
       "id": "linear.get_cycle",
       "name": "Get Linear Cycle",
       "description": "Get detailed information about a specific Linear cycle",
@@ -1344,6 +1488,67 @@
       "schemaHash": "37b3c27a1d60b32fce07ca2b9ef40132bb16aff48b85f66b633359235bcf0526"
     },
     {
+      "id": "linear.get_team",
+      "name": "Get Linear Team",
+      "description": "Get detailed information about a specific Linear team",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Team UUID, key, or name"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getTeam",
+      "schemaHash": "45cd1da4701a50619f0d797c4b510e195dd1dc2930216d2a0d65f0543d02d136"
+    },
+    {
       "id": "linear.get_template",
       "name": "Get Linear Template",
       "description": "Get detailed information about a specific Linear template",
@@ -1466,6 +1671,99 @@
       },
       "entry": "wrapper.ts#getTemplate",
       "schemaHash": "66d3116a0f7fe4aff95ce218ab037f50b0f6d7a1084bb636a632d28022c5c89f"
+    },
+    {
+      "id": "linear.list_comments",
+      "name": "List Linear Comments",
+      "description": "List comments for a specific Linear issue",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID or identifier"
+          }
+        },
+        "required": [
+          "issueId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "comments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email"
+                  ],
+                  "additionalProperties": false
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "body",
+                "createdAt",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalComments": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "comments",
+          "totalComments",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listComments",
+      "schemaHash": "ab5cd0f5a9b1ea3cdb4727f50172cff926b418e8fbd5a52fa5fc230df75174c4"
     },
     {
       "id": "linear.list_cycles",
@@ -2083,6 +2381,182 @@
       },
       "entry": "wrapper.ts#listProjects",
       "schemaHash": "921e028b725a80c18a03584d4e78293f39816b014c6856c5839a701ba5236824"
+    },
+    {
+      "id": "linear.list_teams",
+      "name": "List Linear Teams",
+      "description": "List teams from Linear workspace",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "includeArchived": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 250,
+            "description": "Max teams to return (1-250, default 50)"
+          },
+          "orderBy": {
+            "type": "string",
+            "enum": [
+              "createdAt",
+              "updatedAt"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "teams": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "parent": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalTeams": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "teams",
+          "totalTeams",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listTeams",
+      "schemaHash": "bac1bc53f17e37d9dd51b1887ee26758558c31d9dc8752c2fb8e46d52f033c4a"
+    },
+    {
+      "id": "linear.list_users",
+      "name": "List Linear Users",
+      "description": "List users from Linear workspace",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Filter by name or email"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "email"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalUsers": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "users",
+          "totalUsers",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listUsers",
+      "schemaHash": "d0b24aaa0ae69c9737b4fd2154960c0a7f61b8d95fc46f1bb099ca13bcbc380c"
     },
     {
       "id": "linear.unarchive_issue",

@@ -3411,3 +3411,604 @@ export const updateCycle: ToolDescriptor<UpdateCycleInput, UpdateCycleOutput> = 
     return updateCycleOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
   },
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 4 — Teams + Users + Comments families. Appended below the Batch 3 block;
+// all earlier exports left byte-identical. None of these 6 tools call a resolver
+// (verified against the marketplace source): they route raw inputs through
+// `linearGraphQL`. `list_teams`/`list_users` apply their limit/orderBy defaults
+// in the handler (the gateway `ToolDescriptor` types `input` as `z.ZodType<I>`,
+// which forbids `.default()` on input fields — same constraint as `listIssues`).
+// ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_teams
+// ════════════════════════════════════════════════════════════════════════════
+
+const LIST_TEAMS_QUERY = `
+  query ListTeams($filter: TeamFilter, $first: Int, $orderBy: PaginationOrderBy) {
+    teams(filter: $filter, first: $first, orderBy: $orderBy) {
+      nodes {
+        id
+        key
+        name
+        description
+        createdAt
+        updatedAt
+        parent {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+const listTeamsInput = z.object({
+  query: safeFilter("Search query"),
+  includeArchived: z.boolean().optional(),
+  limit: z.number().min(1).max(250).optional().describe("Max teams to return (1-250, default 50)"),
+  orderBy: z.enum(["createdAt", "updatedAt"]).optional(),
+});
+
+const listTeamsOutput = z.object({
+  teams: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      key: z.string().optional(),
+      description: z.string().optional(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+      parent: z.object({ id: z.string(), name: z.string() }).optional(),
+    }),
+  ),
+  totalTeams: z.number(),
+  estimatedTokens: z.number(),
+});
+
+type ListTeamsInput = z.infer<typeof listTeamsInput>;
+type ListTeamsOutput = z.infer<typeof listTeamsOutput>;
+
+const LIST_TEAMS_DEFAULT_LIMIT = 50;
+
+interface TeamsListResponse {
+  teams: {
+    nodes: Array<{
+      id: string;
+      key?: string | null;
+      name: string;
+      description?: string | null;
+      createdAt?: string;
+      updatedAt?: string;
+      parent?: { id: string; name: string } | null;
+    }>;
+  } | null;
+}
+
+export const listTeams: ToolDescriptor<ListTeamsInput, ListTeamsOutput> = {
+  id: "linear.list_teams",
+  name: "List Linear Teams",
+  description: "List teams from Linear workspace",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: listTeamsInput,
+  output: listTeamsOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const variables: Record<string, unknown> = {
+      first: args.limit ?? LIST_TEAMS_DEFAULT_LIMIT,
+      orderBy: args.orderBy ?? "updatedAt",
+    };
+
+    if (args.query || args.includeArchived !== undefined) {
+      const filter: Record<string, unknown> = {};
+      if (args.query) {
+        filter.name = { contains: args.query };
+      }
+      if (args.includeArchived !== undefined) {
+        filter.includeArchived = args.includeArchived;
+      }
+      variables.filter = filter;
+    }
+
+    const response = await linearGraphQL<TeamsListResponse>(apiKey, LIST_TEAMS_QUERY, variables);
+
+    const teams = response.teams?.nodes || [];
+
+    const baseData = {
+      teams: teams.map((team) => ({
+        id: team.id,
+        key: team.key || undefined,
+        name: team.name,
+        description: team.description?.substring(0, 200) || undefined,
+        createdAt: team.createdAt,
+        updatedAt: team.updatedAt,
+        parent: team.parent ? { id: team.parent.id, name: team.parent.name } : undefined,
+      })),
+      totalTeams: teams.length,
+    };
+
+    return listTeamsOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.get_team
+// ════════════════════════════════════════════════════════════════════════════
+
+const GET_TEAM_QUERY = `
+  query Team($id: String!) {
+    team(id: $id) {
+      id
+      key
+      name
+      description
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const getTeamInput = z.object({
+  query: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Team UUID, key, or name"),
+});
+
+const getTeamOutput = z.object({
+  id: z.string(),
+  key: z.string().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  estimatedTokens: z.number(),
+});
+
+type GetTeamInput = z.infer<typeof getTeamInput>;
+type GetTeamOutput = z.infer<typeof getTeamOutput>;
+
+interface TeamResponse {
+  team: {
+    id: string;
+    key?: string | null;
+    name: string;
+    description?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
+}
+
+export const getTeam: ToolDescriptor<GetTeamInput, GetTeamOutput> = {
+  id: "linear.get_team",
+  name: "Get Linear Team",
+  description: "Get detailed information about a specific Linear team",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: getTeamInput,
+  output: getTeamOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<TeamResponse>(apiKey, GET_TEAM_QUERY, { id: args.query });
+
+    if (!response.team) {
+      throw new Error(`Team not found: ${args.query}`);
+    }
+
+    const baseData = {
+      id: response.team.id,
+      key: response.team.key || undefined,
+      name: response.team.name,
+      description: response.team.description?.substring(0, 500),
+      createdAt: response.team.createdAt,
+      updatedAt: response.team.updatedAt,
+    };
+
+    return getTeamOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_users
+// ════════════════════════════════════════════════════════════════════════════
+
+const LIST_USERS_QUERY = `
+  query Users {
+    users {
+      nodes {
+        id
+        name
+        email
+        active
+        createdAt
+      }
+    }
+  }
+`;
+
+const listUsersInput = z.object({
+  query: safeFilter("Filter by name or email"),
+});
+
+const listUsersOutput = z.object({
+  users: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string(),
+      active: z.boolean().optional(),
+      createdAt: z.string().optional(),
+    }),
+  ),
+  totalUsers: z.number(),
+  estimatedTokens: z.number(),
+});
+
+type ListUsersInput = z.infer<typeof listUsersInput>;
+type ListUsersOutput = z.infer<typeof listUsersOutput>;
+
+interface UsersListResponse {
+  users: {
+    nodes: Array<{
+      id: string;
+      name: string;
+      email: string;
+      active?: boolean | null;
+      createdAt?: string | null;
+    }>;
+  } | null;
+}
+
+export const listUsers: ToolDescriptor<ListUsersInput, ListUsersOutput> = {
+  id: "linear.list_users",
+  name: "List Linear Users",
+  description: "List users from Linear workspace",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: listUsersInput,
+  output: listUsersOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<UsersListResponse>(apiKey, LIST_USERS_QUERY, {});
+
+    const users = response.users?.nodes || [];
+
+    // Client-side filtering if query provided (matches marketplace behavior).
+    const filteredUsers = args.query
+      ? users.filter(
+          (user) =>
+            user.name.toLowerCase().includes(args.query!.toLowerCase()) ||
+            user.email.toLowerCase().includes(args.query!.toLowerCase()),
+        )
+      : users;
+
+    const baseData = {
+      users: filteredUsers.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        active: user.active ?? undefined,
+        createdAt: user.createdAt ?? undefined,
+      })),
+      totalUsers: filteredUsers.length,
+    };
+
+    return listUsersOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.find_user
+// ════════════════════════════════════════════════════════════════════════════
+
+const FIND_USER_QUERY = `
+  query Users($filter: UserFilter) {
+    users(filter: $filter, first: 1) {
+      nodes {
+        id
+        name
+        email
+        displayName
+        avatarUrl
+        active
+        admin
+        createdAt
+      }
+    }
+  }
+`;
+
+const findUserInput = z.object({
+  query: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("User ID, email, or name to search"),
+});
+
+const findUserOutput = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  displayName: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  active: z.boolean().optional(),
+  admin: z.boolean().optional(),
+  createdAt: z.string().optional(),
+  estimatedTokens: z.number(),
+});
+
+type FindUserInput = z.infer<typeof findUserInput>;
+type FindUserOutput = z.infer<typeof findUserOutput>;
+
+interface FindUserResponse {
+  users: {
+    nodes: Array<{
+      id: string;
+      name: string;
+      email: string;
+      displayName?: string | null;
+      avatarUrl?: string | null;
+      active?: boolean | null;
+      admin?: boolean | null;
+      createdAt?: string | null;
+    }>;
+  } | null;
+}
+
+export const findUser: ToolDescriptor<FindUserInput, FindUserOutput> = {
+  id: "linear.find_user",
+  name: "Find Linear User",
+  description: "Find a specific user in Linear workspace",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: findUserInput,
+  output: findUserOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<FindUserResponse>(apiKey, FIND_USER_QUERY, {
+      filter: {
+        or: [
+          { email: { containsIgnoreCase: args.query } },
+          { name: { containsIgnoreCase: args.query } },
+          { displayName: { containsIgnoreCase: args.query } },
+        ],
+      },
+    });
+
+    const users = response.users?.nodes || [];
+
+    if (users.length === 0) {
+      throw new Error(`User not found: ${args.query}`);
+    }
+
+    const user = users[0];
+
+    const baseData = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      displayName: user.displayName || undefined,
+      avatarUrl: user.avatarUrl || undefined,
+      active: user.active ?? undefined,
+      admin: user.admin ?? undefined,
+      createdAt: user.createdAt || undefined,
+    };
+
+    return findUserOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_comments
+// ════════════════════════════════════════════════════════════════════════════
+
+const LIST_COMMENTS_QUERY = `
+  query IssueComments($id: String!) {
+    issue(id: $id) {
+      id
+      comments {
+        nodes {
+          id
+          body
+          user {
+            id
+            name
+            email
+          }
+          createdAt
+          updatedAt
+        }
+      }
+    }
+  }
+`;
+
+const listCommentsInput = z.object({
+  issueId: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID or identifier"),
+});
+
+const listCommentsOutput = z.object({
+  comments: z.array(
+    z.object({
+      id: z.string(),
+      body: z.string(),
+      user: z.object({ id: z.string(), name: z.string(), email: z.string() }).optional(),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+    }),
+  ),
+  totalComments: z.number(),
+  estimatedTokens: z.number(),
+});
+
+type ListCommentsInput = z.infer<typeof listCommentsInput>;
+type ListCommentsOutput = z.infer<typeof listCommentsOutput>;
+
+interface IssueCommentsResponse {
+  issue: {
+    id: string;
+    comments?: {
+      nodes: Array<{
+        id: string;
+        body?: string | null;
+        user?: { id: string; name: string; email: string } | null;
+        createdAt?: string;
+        updatedAt?: string;
+      }>;
+    } | null;
+  } | null;
+}
+
+export const listComments: ToolDescriptor<ListCommentsInput, ListCommentsOutput> = {
+  id: "linear.list_comments",
+  name: "List Linear Comments",
+  description: "List comments for a specific Linear issue",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: listCommentsInput,
+  output: listCommentsOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<IssueCommentsResponse>(apiKey, LIST_COMMENTS_QUERY, {
+      id: args.issueId,
+    });
+
+    if (!response.issue) {
+      throw new Error(`Issue not found: ${args.issueId}`);
+    }
+
+    const comments = response.issue.comments?.nodes || [];
+
+    const baseData = {
+      comments: comments.map((comment) => ({
+        id: comment.id,
+        body: comment.body?.substring(0, 300) || "",
+        user: comment.user
+          ? { id: comment.user.id, name: comment.user.name, email: comment.user.email }
+          : undefined,
+        createdAt: comment.createdAt || "",
+        updatedAt: comment.updatedAt || "",
+      })),
+      totalComments: comments.length,
+    };
+
+    return listCommentsOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_comment
+// ════════════════════════════════════════════════════════════════════════════
+
+const CREATE_COMMENT_MUTATION = `
+  mutation CommentCreate($issueId: String!, $body: String!, $parentId: String) {
+    commentCreate(input: { issueId: $issueId, body: $body, parentId: $parentId }) {
+      success
+      comment {
+        id
+        body
+        createdAt
+      }
+    }
+  }
+`;
+
+const createCommentInput = z.object({
+  issueId: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID or identifier"),
+  // User content - only block control chars (allow whitespace), like the marketplace source.
+  body: z
+    .string()
+    .min(1)
+    .refine(noControlCharsAllowWhitespace, "Control characters not allowed")
+    .describe("Comment content (Markdown)"),
+  parentId: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Parent comment ID (for replies)"),
+});
+
+const createCommentOutput = z.object({
+  success: z.boolean(),
+  comment: z.object({
+    id: z.string(),
+    body: z.string(),
+    createdAt: z.string(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type CreateCommentInput = z.infer<typeof createCommentInput>;
+type CreateCommentOutput = z.infer<typeof createCommentOutput>;
+
+interface CommentCreateResponse {
+  commentCreate: {
+    success: boolean;
+    comment?: {
+      id: string;
+      body: string;
+      createdAt: string;
+    };
+  };
+}
+
+export const createComment: ToolDescriptor<CreateCommentInput, CreateCommentOutput> = {
+  id: "linear.create_comment",
+  name: "Create Linear Comment",
+  description: "Create a comment on a Linear issue",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: createCommentInput,
+  output: createCommentOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<CommentCreateResponse>(apiKey, CREATE_COMMENT_MUTATION, {
+      issueId: args.issueId,
+      body: args.body,
+      parentId: args.parentId,
+    });
+
+    if (!response.commentCreate?.success || !response.commentCreate?.comment) {
+      throw new Error("Failed to create comment");
+    }
+
+    const baseData = {
+      success: response.commentCreate.success,
+      comment: {
+        id: response.commentCreate.comment.id,
+        body: response.commentCreate.comment.body,
+        createdAt: response.commentCreate.comment.createdAt,
+      },
+    };
+
+    return createCommentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
