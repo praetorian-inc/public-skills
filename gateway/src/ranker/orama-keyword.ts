@@ -27,8 +27,14 @@ interface IndexDoc {
   description: string;
 }
 
-/** Split punctuation/hyphens into spaces so each word is a separate token. */
-function toSearchable(text: string): string {
+/**
+ * Split punctuation/hyphens into spaces so each word is a separate token.
+ *
+ * Exported so the vector/hybrid ranker (which shares this orama engine) tokenizes
+ * its `name`/`description`/`term` text identically — one tokenization rule across
+ * all three modes.
+ */
+export function toSearchable(text: string): string {
   return text.replace(/[^a-zA-Z0-9]+/g, " ").trim();
 }
 
