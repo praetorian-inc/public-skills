@@ -16,31 +16,14 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
-import type { GatewayConfig } from "./config.js";
 import { buildIndex } from "./catalog/catalog-index.js";
 import { assertNoDrift } from "./execute/drift.js";
 import { rankerFromConfig } from "./ranker/factory.js";
-import { EnvProvider } from "./secrets/env-provider.js";
-import type { SecretProvider } from "./secrets/provider.js";
+import { secretsFromConfig } from "./secrets/factory.js";
 import { createServer } from "./server.js";
-import { configInvalid } from "./errors/to-tool-error.js";
 
 function configPath(): string {
   return process.argv[2] ?? process.env.GATEWAY_CONFIG ?? "./gateway.config.yaml";
-}
-
-/** Build the configured secret provider. Only `env` is implemented in P0. */
-function secretsFromConfig(cfg: GatewayConfig["secrets"]): SecretProvider {
-  switch (cfg.provider) {
-    case "env":
-      return new EnvProvider();
-    case "1password":
-      throw configInvalid(
-        `secrets provider "1password" is not implemented in P0 (env only); arrives in P1`,
-      );
-    default:
-      throw configInvalid(`unknown secrets provider "${cfg.provider}" (expected: env)`);
-  }
 }
 
 async function main(): Promise<void> {

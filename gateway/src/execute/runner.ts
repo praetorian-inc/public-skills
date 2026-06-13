@@ -7,14 +7,14 @@
  * a coded {@link GatewayError}; the handler layer funnels them through
  * `toToolError` so the MCP transport never sees a raw throw.
  */
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import type { CatalogEntry, Manifest } from "../catalog/types.js";
 import { loadManifest } from "../catalog/manifest.js";
 import type { ToolDescriptor } from "./descriptor.js";
 import type { SecretProvider } from "../secrets/provider.js";
+import { resolveWrapperPath, exportFromEntry } from "./wrapper-resolve.js";
 import {
   GatewayError,
   invalidArgs,
@@ -75,9 +75,9 @@ export async function executeTool(
  * {@link ToolDescriptor} whose id matches.
  *
  * Entry resolution (B2): the manifest tool's `entry` is `wrapper.<ext>#<export>`.
- * We resolve the wrapper file next to the manifest, preferring `wrapper.ts` in
- * dev/test (tsx/vitest can import TS) and falling back to `wrapper.js` when the
- * gateway runs compiled/published. The export name comes from the entry string.
+ * We resolve the wrapper file next to the manifest via the shared
+ * {@link resolveWrapperPath} (compiled `wrapper.js` preferred, `wrapper.ts`
+ * fallback for dev/test). The export name comes from the entry string.
  */
 async function loadDescriptor(entry: CatalogEntry): Promise<ToolDescriptor> {
   const serviceDir = dirname(entry.path);
@@ -108,21 +108,6 @@ async function loadDescriptor(entry: CatalogEntry): Promise<ToolDescriptor> {
     );
   }
   return value;
-}
-
-/** Pick `wrapper.ts` if present, else `wrapper.js`, else undefined. */
-function resolveWrapperPath(serviceDir: string): string | undefined {
-  const ts = join(serviceDir, "wrapper.ts");
-  if (existsSync(ts)) return ts;
-  const js = join(serviceDir, "wrapper.js");
-  if (existsSync(js)) return js;
-  return undefined;
-}
-
-/** "wrapper.ts#echo" → "echo". */
-function exportFromEntry(entry: string): string {
-  const hash = entry.indexOf("#");
-  return hash === -1 ? entry : entry.slice(hash + 1);
 }
 
 /** Structural check that a module export is a usable {@link ToolDescriptor}. */

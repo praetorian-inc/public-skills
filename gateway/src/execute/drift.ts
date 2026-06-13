@@ -13,8 +13,8 @@
  *
  * A CI check can call {@link assertNoDrift} directly with a freshly built index.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import type { ZodTypeAny } from "zod";
@@ -22,6 +22,8 @@ import type { CatalogEntry } from "../catalog/types.js";
 import type { ToolDescriptor } from "./descriptor.js";
 // Reuse the EXACT hash function the manifest generator wrote with.
 import { schemaHash } from "../catalog/schema-hash.js";
+// Resolve wrapper file + export the SAME way the runner does (single source of truth).
+import { resolveWrapperPath, exportFromEntry } from "./wrapper-resolve.js";
 import { manifestDrift, wrapperLoadFailed } from "../errors/to-tool-error.js";
 
 /**
@@ -78,19 +80,6 @@ interface RawManifestTool {
 }
 interface RawManifest {
   tools?: RawManifestTool[];
-}
-
-function resolveWrapperPath(serviceDir: string): string | undefined {
-  const ts = join(serviceDir, "wrapper.ts");
-  if (existsSync(ts)) return ts;
-  const js = join(serviceDir, "wrapper.js");
-  if (existsSync(js)) return js;
-  return undefined;
-}
-
-function exportFromEntry(entry: string): string {
-  const hash = entry.indexOf("#");
-  return hash === -1 ? entry : entry.slice(hash + 1);
 }
 
 function isToolDescriptor(v: unknown): v is ToolDescriptor {
