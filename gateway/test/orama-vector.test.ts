@@ -31,6 +31,11 @@ const VECTORS: Record<string, number[]> = {
   "yagni": [0.95, 0.05, 0],
   "simple": [0, 0.05, 0.95],
   "repeat": [0, 0.95, 0.05],
+  // A query deliberately between the yagni doc [1,0,0] and the dry doc [0,1,0]:
+  // unit-norm, cosine 0.8 to yagni and 0.6 to dry, 0 to kiss. With a 0.5
+  // threshold BOTH yagni and dry clear (kiss is filtered), and yagni MUST rank
+  // above dry — a real multi-candidate ordering assertion (M2).
+  "mixed": [0.8, 0.6, 0],
 };
 
 class FakeEmbedder implements Embedder {
@@ -135,6 +140,22 @@ describe("OramaVectorRanker — semantic", () => {
     await ranker.index([]);
     try {
       expect(await ranker.search("yagni", 10)).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("orders multiple clearing candidates by descending similarity (yagni > dry)", async () => {
+    // M2: the "mixed" query clears the 0.5 threshold for TWO docs (yagni @0.8,
+    // dry @0.6); kiss @0 is filtered. Asserts BOTH membership AND relative order,
+    // so reversing the orama hit order would make this RED (the prior single-hit
+    // tests could not catch a reversal).
+    const ranker = new OramaVectorRanker("semantic", new FakeEmbedder(), freshCache(), 3, 0.5);
+    await ranker.index(fixtureEntries());
+    try {
+      const results = await ranker.search("mixed", 10);
+      expect(results.map((r) => r.id)).toEqual(["adhering-to-yagni", "adhering-to-dry"]);
+      expect(results[0].score).toBeGreaterThan(results[1].score);
     } finally {
       cleanup();
     }

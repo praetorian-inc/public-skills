@@ -29,10 +29,14 @@ const ConfigSchema = z.object({
       // stays valid.
       embedding: z
         .object({
-          // O2: BOTH backends behind the Embedder seam; default = local. The api
+          // O2: BOTH backends behind the Embedder seam; default = api. The api
           // backend fetches an OpenAI-compatible endpoint; local lazy-loads
-          // @orama/plugin-embeddings. keyword never reads this sub-object.
-          backend: z.enum(["local", "api"]).default("local"),
+          // @orama/plugin-embeddings (deferred in P1). keyword never reads this
+          // sub-object. Default is `api` because `local` is not wired in P1 —
+          // defaulting to a backend that throws would make semantic/hybrid
+          // dead-on-arrival (the api backend instead fails loud asking for an
+          // endpoint, which is the intended config path).
+          backend: z.enum(["local", "api"]).default("api"),
           // local model file path OR api model id.
           model: z.string().optional(),
           // api backend only — the /v1/embeddings URL.

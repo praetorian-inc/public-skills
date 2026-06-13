@@ -2,9 +2,10 @@
  * Group I — search.embedding config schema + cross-refinement.
  *
  * - search.embedding is optional with defaults (empty config stays valid).
- * - defaults: backend=local? no — backend default is "local" per §5 schema, but
- *   the embedding sub-object is only read for semantic/hybrid. Verify field
- *   defaults (dimensions, cacheDir, backend).
+ * - defaults: backend default is "api" (O2 — `local` is unwired in P1, so
+ *   defaulting to it would make semantic/hybrid dead-on-arrival). The embedding
+ *   sub-object is only read for semantic/hybrid. Verify field defaults
+ *   (dimensions, cacheDir, backend).
  * - cross-refinement: ranker ∈ {semantic,hybrid} + backend=api ⇒ endpoint
  *   REQUIRED → config_invalid (a Zod error) when absent.
  */
@@ -48,13 +49,15 @@ describe("loadConfig — search.embedding (WS-3)", () => {
     expect(cfg.search.embedding?.cacheDir).toBe("./.gateway-cache/embeddings");
   });
 
-  it("defaults embedding.backend to local", () => {
+  it("defaults embedding.backend to api (O2; local is unwired in P1)", () => {
+    // ranker: keyword exempts the api-endpoint cross-refinement, so this isolates
+    // the backend DEFAULT. Would be RED if the default were "local" (the H2 bug).
     const p = writeConfig(
       "emb-backend-default.yaml",
-      `search:\n  ranker: semantic\n  embedding:\n    model: some-local-model\n`,
+      `search:\n  ranker: keyword\n  embedding:\n    model: some-model\n`,
     );
     const cfg = loadConfig(p);
-    expect(cfg.search.embedding?.backend).toBe("local");
+    expect(cfg.search.embedding?.backend).toBe("api");
   });
 
   it("accepts a full api embedding sub-config", () => {

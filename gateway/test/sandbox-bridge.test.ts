@@ -65,8 +65,15 @@ describe("Sandbox capability bridge", () => {
     });
   });
 
-  it("surfaces unknown_id (P0 code) when model calls an undeclared capability", async () => {
-    await expect(sandbox.run(`caps.nope.nope({})`)).rejects.toBeInstanceOf(GatewayError);
+  it("denies an undeclared capability (deny-by-default): caps.nope.* is not reachable → sandbox_error", async () => {
+    // The preamble builds `caps` accessors ONLY for tools in the index, so an
+    // undeclared service/tool is simply absent from `caps`. Reaching it throws
+    // in-isolate (TypeError on `undefined`), surfaced as a coded sandbox_error.
+    // This is STRONGER than routing unknown_id out: the model cannot even name a
+    // capability the gateway did not expose (plan §11 T6 reconciled to this).
+    const err = (await sandbox.run(`caps.nope.nope({})`).catch((e: unknown) => e)) as GatewayError;
+    expect(err).toBeInstanceOf(GatewayError);
+    expect(err.code).toBe("sandbox_error");
   });
 
   it("resolves a tool's secret host-side; the secret is unreadable inside the isolate", async () => {

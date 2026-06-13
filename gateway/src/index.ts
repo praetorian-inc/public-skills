@@ -14,8 +14,32 @@
  * ALL logs go to stderr — stdout is the MCP stdio framing channel; a stray
  * `console.log` would corrupt the protocol (correctness, not style).
  */
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
+
+// `run_code`'s isolated-vm sandbox needs the process launched with
+// `--no-node-snapshot` (Node >= 20). The published `bin` is invoked as plain
+// `node dist/index.js`, so re-exec ourselves ONCE with the flag when it is not
+// already active — `stdio: "inherit"` makes the child transparently own the MCP
+// stdio framing, so this is invisible to the client. The `dev`/`test` scripts
+// already pass the flag (via argv / NODE_OPTIONS) and so skip the re-exec.
+const NO_NODE_SNAPSHOT = "--no-node-snapshot";
+function reexecWithNodeSnapshotDisabledIfNeeded(): void {
+  const active =
+    process.execArgv.includes(NO_NODE_SNAPSHOT) ||
+    (process.env.NODE_OPTIONS ?? "").split(/\s+/).includes(NO_NODE_SNAPSHOT);
+  if (active || process.env.GATEWAY_NO_REEXEC === "1") return;
+
+  const child = spawnSync(
+    process.execPath,
+    [NO_NODE_SNAPSHOT, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+    { stdio: "inherit", env: { ...process.env, GATEWAY_NO_REEXEC: "1" } },
+  );
+  process.exit(child.status ?? 1);
+}
+reexecWithNodeSnapshotDisabledIfNeeded();
 import { buildIndex } from "./catalog/catalog-index.js";
 import { assertNoDrift } from "./execute/drift.js";
 import { rankerFromConfig } from "./ranker/factory.js";

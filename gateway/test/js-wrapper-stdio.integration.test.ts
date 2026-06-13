@@ -143,10 +143,18 @@ async function driveServer(
   expectedCount: number,
   timeoutMs = 20000,
 ): Promise<RpcResponse[]> {
+  // Simulate a CLEAN adopter environment: strip --no-node-snapshot from the
+  // child so the bin's own re-exec (index.ts, H1) is what makes run_code work.
+  // (vitest itself runs with NODE_OPTIONS=--no-node-snapshot; if we let the child
+  // inherit it, the re-exec would be skipped and H1 would go untested.)
+  const childEnv = { ...process.env };
+  delete childEnv.NODE_OPTIONS;
+  delete childEnv.GATEWAY_NO_REEXEC;
+
   const proc: ChildProcess = spawn(
     process.execPath,
     [distIndex, configPath],
-    { stdio: ["pipe", "pipe", "pipe"] },
+    { stdio: ["pipe", "pipe", "pipe"], env: childEnv },
   );
 
   const responses: RpcResponse[] = [];
@@ -287,6 +295,52 @@ describe("SF-1: compiled gateway loads a plain .js wrapper over stdio", () => {
     expect(result.isError).toBeFalsy();
     const body = JSON.parse(result.content[0].text ?? "null") as unknown;
     expect(body).toEqual({ echoed: "hello from js" });
+  }, IT_TIMEOUT);
+
+  it("run_code works over the published bin invoked WITHOUT --no-node-snapshot (H1 re-exec)", async () => {
+    // Adopters launch the bin as plain `node dist/index.js` — NO --no-node-snapshot,
+    // NO NODE_OPTIONS (driveServer spawns exactly that). index.ts must re-exec
+    // itself with the flag so the isolated-vm sandbox initializes; otherwise the
+    // first run_code call throws config_invalid. This drives a real run_code
+    // program that composes a capability call, proving the re-exec + stdio framing.
+    const responses = await driveServer(
+      [
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2024-11-05",
+            capabilities: {},
+            clientInfo: { name: "sf1-test", version: "0.0.1" },
+          },
+        },
+        {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: {
+            name: "run_code",
+            arguments: {
+              source: `(() => { const r = caps["js-svc"].jsEcho({ msg: "via run_code" }); return { got: r.echoed }; })()`,
+            },
+          },
+        },
+      ],
+      2,
+    );
+
+    const runResponse = responses.find((r) => r.id === 2);
+    expect(runResponse, "run_code response missing").toBeDefined();
+    expect(runResponse!.error).toBeUndefined();
+    const result = runResponse!.result as {
+      isError?: boolean;
+      content: Array<{ type: string; text?: string }>;
+    };
+    // If H1 were unfixed this would be an isError result carrying config_invalid.
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(result.content[0].text ?? "null") as unknown;
+    expect(body).toEqual({ got: "via run_code" });
   }, IT_TIMEOUT);
 
   it("search_capabilities returns the .js tool entry", async () => {
