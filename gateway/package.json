@@ -4,24 +4,50 @@
   "description": "Harness-agnostic MCP capability gateway: runtime discovery + invocation over an agentsmesh catalog of skills and tools.",
   "license": "Apache-2.0",
   "type": "module",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "capability-gateway",
+    "agentsmesh",
+    "llm-tools",
+    "ai-agents",
+    "tool-use",
+    "skills"
+  ],
+  "homepage": "https://github.com/praetorian-inc/public-skills/tree/main/gateway#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/praetorian-inc/public-skills.git",
+    "directory": "gateway"
+  },
+  "bugs": {
+    "url": "https://github.com/praetorian-inc/public-skills/issues"
+  },
   "bin": {
     "capability-gateway": "./dist/index.js"
   },
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run bundle-catalog",
+    "bundle-catalog": "tsx scripts/bundle-catalog.ts",
+    "check-bundle-drift": "tsx scripts/check-bundle-drift.ts",
     "dev": "node --no-node-snapshot --import tsx src/index.ts",
     "test": "NODE_OPTIONS=--no-node-snapshot vitest run",
     "test:watch": "NODE_OPTIONS=--no-node-snapshot vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "generate-manifest": "tsx scripts/generate-manifest.ts"
+    "generate-manifest": "tsx scripts/generate-manifest.ts",
+    "prepublishOnly": "npm run build && npm test && npm run check-bundle-drift"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@orama/orama": "3.1.18",
-    "isolated-vm": "6.0.2",
     "yaml": "2.9.0",
     "zod": "3.25.76",
     "zod-to-json-schema": "3.25.2"
@@ -30,6 +56,10 @@
     "tsx": "4.22.4",
     "typescript": "5.9.3",
     "vitest": "4.1.8"
+  },
+  "optionalDependencies": {
+    "@xenova/transformers": "2.17.2",
+    "isolated-vm": "6.0.2"
   },
   "engines": {
     "node": ">=20"

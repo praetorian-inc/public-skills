@@ -31,11 +31,11 @@ const ConfigSchema = z.object({
         .object({
           // O2: BOTH backends behind the Embedder seam; default = api. The api
           // backend fetches an OpenAI-compatible endpoint; local lazy-loads
-          // @orama/plugin-embeddings (deferred in P1). keyword never reads this
-          // sub-object. Default is `api` because `local` is not wired in P1 —
-          // defaulting to a backend that throws would make semantic/hybrid
-          // dead-on-arrival (the api backend instead fails loud asking for an
-          // endpoint, which is the intended config path).
+          // @xenova/transformers (optionalDependency, wired in WS-D). keyword
+          // never reads this sub-object. Default is `api` because the heavy local
+          // dep is not in the base install — defaulting to it would make
+          // semantic/hybrid require the optional dep out of the box (the api
+          // backend instead fails loud asking for an endpoint, the intended path).
           backend: z.enum(["local", "api"]).default("api"),
           // local model file path OR api model id.
           model: z.string().optional(),
@@ -90,6 +90,17 @@ const ConfigSchema = z.object({
       message: `search.embedding.endpoint is required when ranker is "${cfg.search.ranker}" and embedding.backend is "api"`,
     });
   }
+  // WS-D cross-refinement (§5): semantic/hybrid with the local embedding backend
+  // need a model id/path to load (@xenova/transformers pipeline). keyword never
+  // reads embedding, so it is exempt. No model registry (YAGNI) — just require
+  // the field is present.
+  if (usesEmbeddings && emb?.backend === "local" && (emb.model === undefined || emb.model === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["search", "embedding", "model"],
+      message: `search.embedding.model is required when ranker is "${cfg.search.ranker}" and embedding.backend is "local"`,
+    });
+  }
 });
 
 /** Fully-resolved, validated gateway configuration. */
@@ -105,4 +116,17 @@ export function loadConfig(path: string): GatewayConfig {
   const raw = readFileSync(path, "utf8");
   const data = parseYaml(raw) ?? {};
   return ConfigSchema.parse(data);
+}
+
+/**
+ * Validate a partial config object through the SAME schema as {@link loadConfig}
+ * (so every default + cross-refinement still applies). Used by the bin to build
+ * a default config that points at the bundled catalog when no config file is
+ * present — the schema's "empty config is valid" property means `{}` resolves to
+ * the full default shape, and we override only `catalog.root`.
+ *
+ * @throws if the object fails validation.
+ */
+export function configFromObject(data: unknown): GatewayConfig {
+  return ConfigSchema.parse(data ?? {});
 }

@@ -1,0 +1,6 @@
+{
+  "//": "Marks the served catalog as an ESM package so bare Node treats compiled `tools/<svc>/wrapper.js` files as ES modules (SF-1). The catalog ships no code of its own; `private` keeps it out of any publish. The symlinked `node_modules/zod` here lets catalog wrappers resolve the same zod the gateway uses (avoids the dual-zod hazard that silently empties generated JSON Schemas).",
+  "name": "@praetorian/capability-gateway-catalog",
+  "private": true,
+  "type": "module"
+}

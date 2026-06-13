@@ -19,6 +19,13 @@ import type { Kind } from "../catalog/types.js";
  * (e.g. the 1Password `op` CLI) that is absent, unauthenticated, or failing —
  * distinct from `missing_secret` (a working backend that lacks the key) so an
  * adopter can tell "backend down" from "key not set."
+ *
+ * WS-D adds `embedding_backend_error` for a RUNTIME embedding-backend failure —
+ * the local model failing to load/run, a returned vector whose length ≠ the
+ * configured `dimensions`, or the `api` backend's query-time HTTP non-2xx.
+ * Distinct from `config_invalid` (a genuine misconfiguration, e.g. a missing
+ * optional dep or model id), so a model/adopter can tell "the backend broke at
+ * query time" from "the config is wrong."
  */
 export type GatewayErrorCode =
   | "unknown_id"
@@ -32,7 +39,8 @@ export type GatewayErrorCode =
   | "manifest_drift"
   | "sandbox_timeout"
   | "sandbox_memory"
-  | "sandbox_error";
+  | "sandbox_error"
+  | "embedding_backend_error";
 
 /**
  * Startup/config codes — distinct from the 8 runtime codes above.
@@ -121,6 +129,16 @@ export function manifestDrift(toolId: string): GatewayError {
 /** A `gateway.config.yaml` selection that is invalid or unsupported in this phase. */
 export function configInvalid(detail: string): GatewayError {
   return new GatewayError("config_invalid", `invalid config: ${detail}`);
+}
+
+/**
+ * The embedding backend failed at runtime — the local model failed to load/run,
+ * a returned vector length ≠ the configured `dimensions`, or the `api` backend's
+ * query-time HTTP returned non-2xx. Distinct from {@link configInvalid} (a
+ * genuine misconfiguration). `detail` must never contain a secret value.
+ */
+export function embeddingBackendError(detail: string): GatewayError {
+  return new GatewayError("embedding_backend_error", `embedding backend error: ${detail}`);
 }
 
 /** `run_code` isolate exceeded its wall-clock timeout. */

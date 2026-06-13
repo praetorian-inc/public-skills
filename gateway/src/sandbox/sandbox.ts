@@ -18,7 +18,8 @@ import type { CatalogEntry } from "../catalog/types.js";
 import type { SecretProvider } from "../secrets/provider.js";
 import { assertNodeSnapshotDisabled } from "./node-flags.js";
 import { makeHostCall, buildPreamble, decodeCapError } from "./bridge.js";
-import { GatewayError, sandboxError, sandboxTimeout, sandboxMemory } from "../errors/to-tool-error.js";
+import { desugarCapsImports } from "./import-sugar.js";
+import { GatewayError, sandboxError, sandboxTimeout, sandboxMemory, configInvalid } from "../errors/to-tool-error.js";
 
 /** Resource caps for an isolate run. Conservative defaults per §6.2(d). */
 export interface SandboxLimits {
@@ -78,10 +79,33 @@ export class Sandbox {
     this.#limits = { ...DEFAULT_LIMITS, ...deps.limits };
   }
 
-  /** Lazily load the native module on first use. */
+  /**
+   * Lazily load the native module on first use.
+   *
+   * `isolated-vm` is an OPTIONAL dependency (O9): an install whose native build
+   * was skipped/failed still yields a working 4-tool gateway. When the module is
+   * genuinely absent, the dynamic import throws `ERR_MODULE_NOT_FOUND` — we map
+   * that to a clean `config_invalid` (the same coded-error channel as the
+   * snapshot guard) so `run_code` fails informatively instead of surfacing an
+   * opaque `internal_error`. search/get_schema/resolve_skill/execute never reach
+   * here, so they keep working with no native module present.
+   */
   async #load(): Promise<typeof IVM> {
     if (!this.#ivm) {
-      this.#ivm = (await import("isolated-vm")).default;
+      try {
+        this.#ivm = (await import("isolated-vm")).default;
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException)?.code;
+        if (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") {
+          throw configInvalid(
+            'the optional native dependency "isolated-vm" is not installed, so run_code is ' +
+              "unavailable. The other tools (search_capabilities, get_schema, resolve_skill, " +
+              'execute) work without it. To enable run_code, install "isolated-vm" (a prebuilt ' +
+              "binary, or a node-gyp build needing Python + a C/C++ toolchain).",
+          );
+        }
+        throw e;
+      }
     }
     return this.#ivm;
   }
@@ -110,11 +134,19 @@ export class Sandbox {
       const toolIds = this.#deps.index.filter((e) => e.kind === "tool").map((e) => e.id);
       const preamble = buildPreamble(toolIds) + "\n";
 
+      // Rewrite `import { x } from "caps/<svc>"` sugar to `const { x } = caps.<svc>;`
+      // over the frozen global BEFORE compiling (the bare isolate has no module
+      // loader). A malformed/dangerous binding throws here → mapped to
+      // sandbox_error by the catch (injection-free codegen, plan §8.3). Desugared
+      // output is statements, so #compile's expression form fails and it falls
+      // back to the function-body form automatically.
+      const desugared = desugarCapsImports(source);
+
       // Compile the source as an expression; if that's a syntax error (e.g. the
       // program is statements like `while (true) {}` or uses `return`), fall back
       // to the function-body form. Both compile attempts stay inside the catch so
       // a genuine syntax error still surfaces as a coded sandbox_error.
-      const script = this.#compile(isolate, preamble, source);
+      const script = this.#compile(isolate, preamble, desugared);
 
       const json = (await script.run(context, {
         timeout: this.#limits.timeoutMs,

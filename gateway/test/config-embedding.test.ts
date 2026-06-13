@@ -101,10 +101,36 @@ describe("loadConfig — search.embedding (WS-3)", () => {
     expect(() => loadConfig(p)).not.toThrow();
   });
 
-  it("does NOT require endpoint for semantic + backend local", () => {
+  it("does NOT require endpoint for semantic + backend local (with a model)", () => {
     const p = writeConfig(
       "emb-local-ok.yaml",
+      `search:\n  ranker: semantic\n  embedding:\n    backend: local\n    model: Xenova/all-MiniLM-L6-v2\n`,
+    );
+    expect(() => loadConfig(p)).not.toThrow();
+  });
+
+  it("rejects semantic + backend local WITHOUT a model (WS-D cross-refinement)", () => {
+    // local needs a model id/path to load. ranker semantic/hybrid + local + no
+    // model → config_invalid, mirroring the api-endpoint refinement.
+    const p = writeConfig(
+      "emb-local-no-model.yaml",
       `search:\n  ranker: semantic\n  embedding:\n    backend: local\n`,
+    );
+    expect(() => loadConfig(p)).toThrow(/model/i);
+  });
+
+  it("rejects hybrid + backend local WITHOUT a model (WS-D cross-refinement)", () => {
+    const p = writeConfig(
+      "emb-hybrid-local-no-model.yaml",
+      `search:\n  ranker: hybrid\n  embedding:\n    backend: local\n`,
+    );
+    expect(() => loadConfig(p)).toThrow(/model/i);
+  });
+
+  it("does NOT require model for keyword + backend local (embedding unused)", () => {
+    const p = writeConfig(
+      "emb-keyword-local-ok.yaml",
+      `search:\n  ranker: keyword\n  embedding:\n    backend: local\n`,
     );
     expect(() => loadConfig(p)).not.toThrow();
   });

@@ -15,9 +15,12 @@
  * `console.log` would corrupt the protocol (correctness, not style).
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./config.js";
+import type { GatewayConfig } from "./config.js";
+import { configFromObject, loadConfig } from "./config.js";
 
 // `run_code`'s isolated-vm sandbox needs the process launched with
 // `--no-node-snapshot` (Node >= 20). The published `bin` is invoked as plain
@@ -47,14 +50,63 @@ import { secretsFromConfig } from "./secrets/factory.js";
 import { Sandbox } from "./sandbox/sandbox.js";
 import { createServer } from "./server.js";
 
-function configPath(): string {
-  return process.argv[2] ?? process.env.GATEWAY_CONFIG ?? "./gateway.config.yaml";
+const DEFAULT_CONFIG = "./gateway.config.yaml";
+
+/**
+ * The resolved config path and whether the adopter chose it explicitly (argv or
+ * `GATEWAY_CONFIG`) vs. falling through to the `./gateway.config.yaml` default.
+ * The distinction drives the bundled-catalog fallback below: we only substitute
+ * the packaged catalog when the user gave NO config of their own.
+ */
+function resolveConfigPath(): { path: string; explicit: boolean } {
+  const fromArg = process.argv[2] ?? process.env.GATEWAY_CONFIG;
+  return fromArg !== undefined
+    ? { path: fromArg, explicit: true }
+    : { path: DEFAULT_CONFIG, explicit: false };
+}
+
+/**
+ * Absolute path to the catalog bundled into the published package
+ * (`dist/bundled-catalog`, written by `scripts/bundle-catalog.ts`). Resolved
+ * relative to THIS module (`import.meta.url`), never cwd, so it points at the
+ * package's own copy regardless of where the bin is invoked from. Returns the
+ * path only if it actually exists (it won't when running from source via tsx).
+ */
+function bundledCatalogRoot(): string | undefined {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "bundled-catalog");
+  return existsSync(root) ? root : undefined;
+}
+
+/**
+ * Decide the effective config:
+ *   - an explicit config path (argv / GATEWAY_CONFIG)  → load it (as today);
+ *   - a present `./gateway.config.yaml`                → load it (as today);
+ *   - NEITHER, but a bundled catalog is packaged       → default config whose
+ *     `catalog.root` points at the bundled catalog (so `npx` works out of the
+ *     box — O5);
+ *   - none of the above                                → load the default path
+ *     and let the missing-file error surface (unchanged behaviour).
+ */
+function resolveConfig(): { config: GatewayConfig; source: string } {
+  const { path, explicit } = resolveConfigPath();
+  if (explicit || existsSync(path)) {
+    return { config: loadConfig(path), source: path };
+  }
+  const bundled = bundledCatalogRoot();
+  if (bundled !== undefined) {
+    return {
+      config: configFromObject({ catalog: { root: bundled } }),
+      source: `bundled catalog (no config file; ${bundled})`,
+    };
+  }
+  // No bundle (running from source) and no config file: preserve the original
+  // behaviour — load the default path so the same missing-file error surfaces.
+  return { config: loadConfig(path), source: path };
 }
 
 async function main(): Promise<void> {
-  const path = configPath();
-  const config = loadConfig(path);
-  console.error(`[capability-gateway] config: ${path}`);
+  const { config, source } = resolveConfig();
+  console.error(`[capability-gateway] config: ${source}`);
 
   const index = buildIndex(config.catalog.root);
   console.error(`[capability-gateway] indexed ${index.length} entries from ${config.catalog.root}`);

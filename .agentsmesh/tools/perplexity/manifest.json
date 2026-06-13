@@ -1,0 +1,162 @@
+{
+  "manifestVersion": 1,
+  "service": "perplexity",
+  "tools": [
+    {
+      "id": "perplexity.ask",
+      "name": "Perplexity Ask",
+      "description": "Conversational AI with real-time web search using the Perplexity sonar-pro model.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "user",
+                    "assistant"
+                  ],
+                  "description": "Role of the message sender"
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content of the message"
+                }
+              },
+              "required": [
+                "role",
+                "content"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "description": "Array of conversation messages"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Convenience: auto-wrapped into a messages array"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Response as markdown-formatted text"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "messageCount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "messageCount"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "PERPLEXITY_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#perplexityAsk",
+      "schemaHash": "064191e5b950d10d5facea421897fa754479dddc9d55ae38d5b2a20dc63d6dd1"
+    },
+    {
+      "id": "perplexity.search",
+      "name": "Perplexity Search",
+      "description": "Perform web search using the Perplexity Search API with ranked results.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Search query string"
+          },
+          "max_results": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of results to return (1-20, default: 10)"
+          },
+          "max_tokens_per_page": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 2048,
+            "description": "Maximum tokens to extract per webpage (default: 1024)"
+          },
+          "country": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$",
+            "description": "ISO 3166-1 alpha-2 country code (e.g., US, GB)"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Search results as plain text"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "resultCount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "PERPLEXITY_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#perplexitySearch",
+      "schemaHash": "d0258c491d6a0450e38b18ad51579310d5e8594d1db392a82e088a6c237cf90b"
+    }
+  ]
+}

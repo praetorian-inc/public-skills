@@ -3,3 +3,7 @@ dist/
 coverage/
 *.log
 .DS_Store
+
+# runtime caches / agent scratch
+.gateway-cache/
+.claude/
