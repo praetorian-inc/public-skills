@@ -77,4 +77,31 @@ describe("loadConfig", () => {
   it("throws a clear error when the file does not exist", () => {
     expect(() => loadConfig(join(dir, "does-not-exist.yaml"))).toThrow();
   });
+
+  it("parses an optional secrets.onepassword sub-object", () => {
+    const p = writeConfig(
+      "op.yaml",
+      `secrets:\n  provider: 1password\n  onepassword:\n    vault: Engineering\n    cliPath: /usr/local/bin/op\n`,
+    );
+    const cfg = loadConfig(p);
+    expect(cfg.secrets.provider).toBe("1password");
+    expect(cfg.secrets.onepassword?.vault).toBe("Engineering");
+    expect(cfg.secrets.onepassword?.cliPath).toBe("/usr/local/bin/op");
+  });
+
+  it("defaults refTemplate and cliPath inside secrets.onepassword", () => {
+    const p = writeConfig(
+      "op-defaults.yaml",
+      `secrets:\n  provider: 1password\n  onepassword:\n    vault: Shared\n`,
+    );
+    const cfg = loadConfig(p);
+    expect(cfg.secrets.onepassword?.refTemplate).toBe("op://{vault}/{key}/password");
+    expect(cfg.secrets.onepassword?.cliPath).toBe("op");
+  });
+
+  it("leaves secrets.onepassword undefined when omitted", () => {
+    const p = writeConfig("op-absent.yaml", `secrets:\n  provider: 1password\n`);
+    const cfg = loadConfig(p);
+    expect(cfg.secrets.onepassword).toBeUndefined();
+  });
 });
