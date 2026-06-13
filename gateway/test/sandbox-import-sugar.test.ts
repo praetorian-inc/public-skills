@@ -59,7 +59,7 @@ describe("run_code import-sugar — functional", () => {
     expect(result).toEqual({ combined: "ab", secretSeen: true });
   });
 
-  it("supports a namespace import (import * as svc)", async () => {
+  it("a namespace-import program (import * as svc) calls a capability and returns its value", async () => {
     const result = await sandbox.run(
       [
         `import * as e from "caps/echo";`,
@@ -69,7 +69,7 @@ describe("run_code import-sugar — functional", () => {
     expect(result).toEqual({ text: "ns" });
   });
 
-  it("supports an aliased named import (a as b)", async () => {
+  it("an aliased named import (a as b) calls a capability and returns its value", async () => {
     const result = await sandbox.run(
       [
         `import { echo as doEcho } from "caps/echo";`,

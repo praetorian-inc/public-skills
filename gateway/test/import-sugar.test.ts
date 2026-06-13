@@ -36,7 +36,7 @@ describe("desugarCapsImports — named imports", () => {
     expect(out).toBe(`const { a, b: c } = caps.svc;`);
   });
 
-  it("accepts single quotes", () => {
+  it("rewrites a named import written with single quotes", () => {
     const out = desugarCapsImports(`import { x } from 'caps/svc';`);
     expect(out).toBe(`const { x } = caps.svc;`);
   });
