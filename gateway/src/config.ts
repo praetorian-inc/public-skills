@@ -23,6 +23,27 @@ const ConfigSchema = z.object({
   search: z
     .object({
       ranker: z.enum(["keyword", "semantic", "hybrid"]).default("keyword"),
+      // WS-3: read only when ranker = semantic | hybrid. Optional, with defaults
+      // for the inner fields so `embedding: {}` is valid; the whole sub-object is
+      // optional so a bare `search: { ranker: keyword }` (and an empty config)
+      // stays valid.
+      embedding: z
+        .object({
+          // O2: BOTH backends behind the Embedder seam; default = local. The api
+          // backend fetches an OpenAI-compatible endpoint; local lazy-loads
+          // @orama/plugin-embeddings. keyword never reads this sub-object.
+          backend: z.enum(["local", "api"]).default("local"),
+          // local model file path OR api model id.
+          model: z.string().optional(),
+          // api backend only — the /v1/embeddings URL.
+          endpoint: z.string().url().optional(),
+          // env var NAME holding the api key (never the key itself).
+          apiKeyEnv: z.string().optional(),
+          // must match the vector[N] schema field the ranker builds.
+          dimensions: z.number().int().positive().default(384),
+          cacheDir: z.string().default("./.gateway-cache/embeddings"),
+        })
+        .optional(),
     })
     .default({}),
   secrets: z
@@ -43,6 +64,20 @@ const ConfigSchema = z.object({
         .optional(),
     })
     .default({}),
+}).superRefine((cfg, ctx) => {
+  // WS-3 cross-refinement (§5): semantic/hybrid with the api embedding backend
+  // need an endpoint to call. Express it here (JSON Schema can't), so a misconfig
+  // fails at load with a clear message instead of mid-query. keyword never reads
+  // embedding, so it is exempt.
+  const usesEmbeddings = cfg.search.ranker === "semantic" || cfg.search.ranker === "hybrid";
+  const emb = cfg.search.embedding;
+  if (usesEmbeddings && emb?.backend === "api" && (emb.endpoint === undefined || emb.endpoint === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["search", "embedding", "endpoint"],
+      message: `search.embedding.endpoint is required when ranker is "${cfg.search.ranker}" and embedding.backend is "api"`,
+    });
+  }
 });
 
 /** Fully-resolved, validated gateway configuration. */

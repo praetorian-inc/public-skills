@@ -59,9 +59,12 @@ describe("rankerFromConfig", () => {
     expect(ranker).toBeInstanceOf(OramaKeywordRanker);
   });
 
-  it("throws a clear GatewayError for ranker: semantic (P1, not in P0)", () => {
+  it("throws config_invalid for ranker: semantic with NO embedding sub-config (WS-3)", () => {
+    // WS-3: semantic/hybrid are now implemented, but require an embedding
+    // sub-config; absent → a clear config_invalid (not the old P0 "not
+    // implemented" throw).
     expect(() => rankerFromConfig({ ranker: "semantic" })).toThrow(GatewayError);
-    expect(() => rankerFromConfig({ ranker: "semantic" })).toThrow(/not implemented in P0/i);
+    expect(() => rankerFromConfig({ ranker: "semantic" })).toThrow(/search\.embedding/i);
     try {
       rankerFromConfig({ ranker: "semantic" });
     } catch (e) {
@@ -70,9 +73,9 @@ describe("rankerFromConfig", () => {
     }
   });
 
-  it("throws a clear GatewayError for ranker: hybrid (P1, not in P0)", () => {
+  it("throws config_invalid for ranker: hybrid with NO embedding sub-config (WS-3)", () => {
     expect(() => rankerFromConfig({ ranker: "hybrid" })).toThrow(GatewayError);
-    expect(() => rankerFromConfig({ ranker: "hybrid" })).toThrow(/not implemented in P0/i);
+    expect(() => rankerFromConfig({ ranker: "hybrid" })).toThrow(/search\.embedding/i);
   });
 
   it("throws a clear GatewayError for an unknown ranker value", () => {
