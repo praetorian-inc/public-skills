@@ -12,15 +12,16 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "dev": "node --no-node-snapshot --import tsx src/index.ts",
+    "test": "NODE_OPTIONS=--no-node-snapshot vitest run",
+    "test:watch": "NODE_OPTIONS=--no-node-snapshot vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate-manifest": "tsx scripts/generate-manifest.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@orama/orama": "3.1.18",
+    "isolated-vm": "6.0.2",
     "yaml": "2.9.0",
     "zod": "3.25.76",
     "zod-to-json-schema": "3.25.2"
