@@ -23,7 +23,7 @@ import { rankerFromConfig } from "./ranker/factory.js";
 import { EnvProvider } from "./secrets/env-provider.js";
 import type { SecretProvider } from "./secrets/provider.js";
 import { createServer } from "./server.js";
-import { GatewayError } from "./errors/to-tool-error.js";
+import { configInvalid } from "./errors/to-tool-error.js";
 
 function configPath(): string {
   return process.argv[2] ?? process.env.GATEWAY_CONFIG ?? "./gateway.config.yaml";
@@ -35,15 +35,11 @@ function secretsFromConfig(cfg: GatewayConfig["secrets"]): SecretProvider {
     case "env":
       return new EnvProvider();
     case "1password":
-      throw new GatewayError(
-        "manifest_invalid",
+      throw configInvalid(
         `secrets provider "1password" is not implemented in P0 (env only); arrives in P1`,
       );
     default:
-      throw new GatewayError(
-        "manifest_invalid",
-        `unknown secrets provider "${cfg.provider}" (expected: env)`,
-      );
+      throw configInvalid(`unknown secrets provider "${cfg.provider}" (expected: env)`);
   }
 }
 

@@ -8,11 +8,10 @@
  * so we refuse to start with a `manifest_drift` {@link GatewayError}.
  *
  * The hash is recomputed with the SAME `schemaHash(...)` the manifest generator
- * used, imported verbatim from `scripts/generate-manifest.ts`, so dev, CI, and
- * this boot assertion can never compute it differently.
+ * uses — both import it from `../catalog/schema-hash.js` (the single source of
+ * truth), so dev, CI, and this boot assertion can never compute it differently.
  *
- * This calls the exported `schemaHash` from the generate-manifest script; a CI
- * check can call {@link assertNoDrift} directly with a freshly built index.
+ * A CI check can call {@link assertNoDrift} directly with a freshly built index.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

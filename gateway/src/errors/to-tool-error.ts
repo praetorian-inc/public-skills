@@ -19,8 +19,14 @@ export type GatewayErrorCode =
   | "manifest_invalid"
   | "manifest_drift";
 
-/** Code used for any throw that is NOT a recognized {@link GatewayError}. */
-export type InternalErrorCode = "internal_error";
+/**
+ * Startup/config codes — distinct from the 8 runtime codes above.
+ * `config_invalid` covers a bad/unsupported `gateway.config.yaml` selection
+ * (e.g. a ranker or secrets provider that isn't implemented in this phase);
+ * `internal_error` is the fallback for any throw that is NOT a recognized
+ * {@link GatewayError}.
+ */
+export type StartupErrorCode = "config_invalid" | "internal_error";
 
 /**
  * An error carrying a stable, machine-readable `code`.
@@ -29,9 +35,9 @@ export type InternalErrorCode = "internal_error";
  * rather than `new GatewayError(...)` directly, so messages stay consistent.
  */
 export class GatewayError extends Error {
-  readonly code: GatewayErrorCode;
+  readonly code: GatewayErrorCode | "config_invalid";
 
-  constructor(code: GatewayErrorCode, message: string) {
+  constructor(code: GatewayErrorCode | "config_invalid", message: string) {
     super(message);
     this.name = "GatewayError";
     this.code = code;
@@ -87,6 +93,11 @@ export function manifestDrift(toolId: string): GatewayError {
   );
 }
 
+/** A `gateway.config.yaml` selection that is invalid or unsupported in this phase. */
+export function configInvalid(detail: string): GatewayError {
+  return new GatewayError("config_invalid", `invalid config: ${detail}`);
+}
+
 /**
  * Map any thrown value to a structured MCP tool error.
  *
@@ -102,7 +113,7 @@ export function toToolError(e: unknown): CallToolResult {
   };
 }
 
-function describe(e: unknown): { code: GatewayErrorCode | InternalErrorCode; message: string } {
+function describe(e: unknown): { code: GatewayErrorCode | StartupErrorCode; message: string } {
   if (e instanceof GatewayError) {
     return { code: e.code, message: e.message };
   }

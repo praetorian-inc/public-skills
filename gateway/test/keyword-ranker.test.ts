@@ -62,6 +62,12 @@ describe("rankerFromConfig", () => {
   it("throws a clear GatewayError for ranker: semantic (P1, not in P0)", () => {
     expect(() => rankerFromConfig({ ranker: "semantic" })).toThrow(GatewayError);
     expect(() => rankerFromConfig({ ranker: "semantic" })).toThrow(/not implemented in P0/i);
+    try {
+      rankerFromConfig({ ranker: "semantic" });
+    } catch (e) {
+      // A config selection error is config_invalid — NOT manifest_invalid (no manifest involved).
+      expect((e as GatewayError).code).toBe("config_invalid");
+    }
   });
 
   it("throws a clear GatewayError for ranker: hybrid (P1, not in P0)", () => {

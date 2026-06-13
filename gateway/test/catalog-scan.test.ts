@@ -89,6 +89,7 @@ describe("buildIndex — tool entries", () => {
           inputSchema: {},
           outputSchema: {},
           entry: "wrapper.ts#echo",
+          schemaHash: "0000000000000000000000000000000000000000000000000000000000000000",
         },
         {
           id: "echo.shout",
@@ -97,6 +98,7 @@ describe("buildIndex — tool entries", () => {
           inputSchema: {},
           outputSchema: {},
           entry: "wrapper.ts#shout",
+          schemaHash: "0000000000000000000000000000000000000000000000000000000000000000",
         },
       ],
     });
@@ -130,6 +132,7 @@ describe("buildIndex — id uniqueness", () => {
             inputSchema: {},
             outputSchema: {},
             entry: "wrapper.ts#echo",
+            schemaHash: "0000000000000000000000000000000000000000000000000000000000000000",
           },
         ],
       });
@@ -153,6 +156,7 @@ describe("buildIndex — id uniqueness", () => {
             inputSchema: {},
             outputSchema: {},
             entry: "wrapper.ts#tool",
+            schemaHash: "0000000000000000000000000000000000000000000000000000000000000000",
           },
         ],
       });
@@ -167,6 +171,7 @@ describe("buildIndex — id uniqueness", () => {
             inputSchema: {},
             outputSchema: {},
             entry: "wrapper.ts#tool",
+            schemaHash: "0000000000000000000000000000000000000000000000000000000000000000",
           },
         ],
       });

@@ -53,6 +53,13 @@ export interface ManifestTool {
   wraps?: { type: "mcp" | "rest"; server?: string; tool?: string };
   /** "wrapper.ts#exportName" — resolved by the runner. */
   entry: string;
+  /**
+   * Stable hash of the emitted input/output JSON Schema (B2 drift guard).
+   * Written by `generate-manifest`; recomputed from the live wrapper at boot/CI
+   * by `assertNoDrift`. A mismatch is `manifest_drift`; absence is
+   * `manifest_invalid` (validated below), not silently treated as drift.
+   */
+  schemaHash: string;
 }
 
 /**

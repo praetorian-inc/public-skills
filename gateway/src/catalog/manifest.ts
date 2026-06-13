@@ -27,6 +27,9 @@ const manifestToolSchema = z.object({
     })
     .optional(),
   entry: z.string().min(1),
+  // B2 drift guard: a manifest missing its schemaHash is manifest_invalid here,
+  // rather than slipping through to a (wrong-code) manifest_drift later.
+  schemaHash: z.string().min(1),
 });
 
 const manifestSchema = z.object({

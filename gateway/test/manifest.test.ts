@@ -33,6 +33,7 @@ const validManifest = {
       outputSchema: { type: "object", properties: { text: { type: "string" } } },
       auth: [],
       entry: "wrapper.ts#echo",
+      schemaHash: "0000000000000000000000000000000000000000000000000000000000000000",
     },
   ],
 };
@@ -53,6 +54,18 @@ describe("loadManifest", () => {
     delete (noAuth.tools[0] as Record<string, unknown>).auth;
     const p = write("noauth.json", JSON.stringify(noAuth));
     expect(loadManifest(p).tools[0].auth).toBeUndefined();
+  });
+
+  it("rejects a tool missing schemaHash with manifest_invalid (not manifest_drift)", () => {
+    const noHash = structuredClone(validManifest);
+    delete (noHash.tools[0] as Record<string, unknown>).schemaHash;
+    const p = write("nohash.json", JSON.stringify(noHash));
+    expect(() => loadManifest(p)).toThrow(GatewayError);
+    try {
+      loadManifest(p);
+    } catch (e) {
+      expect((e as GatewayError).code).toBe("manifest_invalid");
+    }
   });
 
   it("rejects invalid JSON with a manifest_invalid error", () => {
