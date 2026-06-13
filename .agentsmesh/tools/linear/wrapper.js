@@ -1339,3 +1339,497 @@ export const unarchiveIssue = {
         return unarchiveIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
     },
 };
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 2 — Projects family (list/get/create/update/delete/archive). Ported from
+// the marketplace `core/tools/linear/*-project.ts` files. GraphQL strings, Zod
+// shapes, and output maps are carried verbatim; the `init.js` side-effect +
+// `createLinearClient()` + `executeGraphQL` + `testToken` are replaced by the
+// shared CTX-only `linearGraphQL(apiKey, …)` transport. Prose fields (name /
+// description / summary) use `safeText`; ID/filter fields use `safeFilter` (or
+// the required-id chain). Only `create_project` resolves a team id
+// (`resolveTeamId`); the others pass raw ids, matching the marketplace sources.
+// ════════════════════════════════════════════════════════════════════════════
+// ── linear.list_projects ─────────────────────────────────────────────────────
+const LIST_PROJECTS_QUERY = `
+  query Projects($first: Int, $includeArchived: Boolean, $orderBy: PaginationOrderBy) {
+    projects(first: $first, includeArchived: $includeArchived, orderBy: $orderBy) {
+      nodes {
+        id
+        name
+        description
+        content
+        state
+        lead {
+          id
+          name
+        }
+        startDate
+        targetDate
+        createdAt
+        updatedAt
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+const listProjectsInput = z.object({
+    team: safeFilter("Team name or ID"),
+    state: safeFilter("State name or ID"),
+    query: safeFilter("Search for content in project name"),
+    includeArchived: z.boolean().optional(),
+    limit: z.number().min(1).max(250).optional(),
+    orderBy: z.enum(["createdAt", "updatedAt"]).optional(),
+    fullDescription: z
+        .boolean()
+        .optional()
+        .describe("Return full description without truncation (default: false for token efficiency)"),
+    fullContent: z
+        .boolean()
+        .optional()
+        .describe("Return full content without truncation (default: false for token efficiency)"),
+});
+const LIST_PROJECTS_DEFAULT_LIMIT = 50;
+const listProjectsOutput = z.object({
+    projects: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        content: z.string().optional(),
+        state: z.string().optional(),
+        lead: z.object({ id: z.string(), name: z.string() }).optional(),
+        startDate: z.string().optional(),
+        targetDate: z.string().optional(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+    })),
+    totalProjects: z.number(),
+    nextOffset: z.string().optional(),
+    estimatedTokens: z.number(),
+});
+export const listProjects = {
+    id: "linear.list_projects",
+    name: "List Linear Projects",
+    description: "List projects from Linear workspace",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: listProjectsInput,
+    output: listProjectsOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, LIST_PROJECTS_QUERY, {
+            first: args.limit ?? LIST_PROJECTS_DEFAULT_LIMIT,
+            includeArchived: args.includeArchived ?? false,
+            orderBy: args.orderBy ?? "updatedAt",
+        });
+        const projects = response.projects?.nodes || [];
+        const baseData = {
+            projects: projects.map((project) => ({
+                id: project.id,
+                name: project.name,
+                description: args.fullDescription
+                    ? project.description || undefined
+                    : project.description?.substring(0, 200) || undefined,
+                content: args.fullContent
+                    ? project.content || undefined
+                    : project.content?.substring(0, 500) || undefined,
+                state: project.state || undefined,
+                lead: project.lead ? { id: project.lead.id, name: project.lead.name } : undefined,
+                startDate: project.startDate || undefined,
+                targetDate: project.targetDate || undefined,
+                createdAt: project.createdAt,
+                updatedAt: project.updatedAt,
+            })),
+            totalProjects: projects.length,
+            nextOffset: response.projects?.pageInfo?.endCursor || undefined,
+        };
+        return listProjectsOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.get_project ───────────────────────────────────────────────────────
+const GET_PROJECT_QUERY = `
+  query Project($id: String!) {
+    project(id: $id) {
+      id
+      name
+      description
+      content
+      state
+      lead {
+        id
+        name
+        email
+      }
+      startDate
+      targetDate
+      createdAt
+      updatedAt
+    }
+  }
+`;
+const getProjectInput = z.object({
+    query: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Project ID or name"),
+    fullDescription: z
+        .boolean()
+        .optional()
+        .describe("Return full description without truncation (default: false for token efficiency)"),
+    fullContent: z
+        .boolean()
+        .optional()
+        .describe("Return full content without truncation (default: false for token efficiency)"),
+});
+const getProjectOutput = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().optional(),
+    content: z.string().optional(),
+    state: z.string().optional(),
+    lead: z.object({ id: z.string(), name: z.string(), email: z.string() }).optional(),
+    startDate: z.string().optional(),
+    targetDate: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    estimatedTokens: z.number(),
+});
+export const getProject = {
+    id: "linear.get_project",
+    name: "Get Linear Project",
+    description: "Get detailed information about a specific Linear project",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: getProjectInput,
+    output: getProjectOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, GET_PROJECT_QUERY, {
+            id: args.query,
+        });
+        if (!response.project) {
+            throw new Error(`Project not found: ${args.query}`);
+        }
+        const baseData = {
+            id: response.project.id,
+            name: response.project.name,
+            description: args.fullDescription
+                ? response.project.description || undefined
+                : response.project.description?.substring(0, 500) || undefined,
+            content: args.fullContent
+                ? response.project.content || undefined
+                : response.project.content?.substring(0, 1000) || undefined,
+            state: response.project.state || undefined,
+            lead: response.project.lead
+                ? {
+                    id: response.project.lead.id,
+                    name: response.project.lead.name,
+                    email: response.project.lead.email,
+                }
+                : undefined,
+            startDate: response.project.startDate || undefined,
+            targetDate: response.project.targetDate || undefined,
+            createdAt: response.project.createdAt,
+            updatedAt: response.project.updatedAt,
+        };
+        return getProjectOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.create_project ────────────────────────────────────────────────────
+const CREATE_PROJECT_MUTATION = `
+  mutation ProjectCreate($input: ProjectCreateInput!) {
+    projectCreate(input: $input) {
+      success
+      project {
+        id
+        name
+        url
+      }
+    }
+  }
+`;
+const createProjectInput = z.object({
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlCharsAllowWhitespace, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Project name"),
+    description: safeText("Full project description (Markdown)").optional(),
+    summary: safeText("Concise plaintext summary (max 255 chars)").optional(),
+    team: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Team name or ID"),
+    lead: safeFilter('User ID, name, email, or "me"'),
+    state: safeFilter("State of the project"),
+    startDate: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Start date (ISO format)"),
+    targetDate: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Target date (ISO format)"),
+    priority: z.number().min(0).max(4).optional().describe("0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low"),
+    labels: z
+        .array(z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected"))
+        .optional()
+        .describe("Label names or IDs"),
+});
+const createProjectOutput = z.object({
+    success: z.boolean(),
+    project: z.object({ id: z.string(), name: z.string(), url: z.string() }),
+    estimatedTokens: z.number(),
+});
+export const createProject = {
+    id: "linear.create_project",
+    name: "Create Linear Project",
+    description: "Create a new project in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createProjectInput,
+    output: createProjectOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const teamId = await resolveTeamId(apiKey, args.team);
+        const mutationInput = {
+            name: args.name,
+            teamIds: [teamId],
+            // Praetorian workspace default project template - required for all projects
+            templateId: "11156350-e6e1-4712-b992-9e5b6e176ee3",
+        };
+        if (args.description) {
+            mutationInput.description = args.description;
+        }
+        if (args.summary) {
+            mutationInput.summary = args.summary;
+        }
+        if (args.lead) {
+            mutationInput.leadId = args.lead;
+        }
+        if (args.state) {
+            mutationInput.stateId = args.state;
+        }
+        if (args.startDate) {
+            mutationInput.startDate = args.startDate;
+        }
+        if (args.targetDate) {
+            mutationInput.targetDate = args.targetDate;
+        }
+        if (args.priority !== undefined) {
+            mutationInput.priority = args.priority;
+        }
+        if (args.labels) {
+            mutationInput.labelIds = args.labels;
+        }
+        const response = await linearGraphQL(apiKey, CREATE_PROJECT_MUTATION, {
+            input: mutationInput,
+        });
+        if (!response.projectCreate?.success || !response.projectCreate?.project) {
+            throw new Error("Failed to create project");
+        }
+        const baseData = {
+            success: response.projectCreate.success,
+            project: {
+                id: response.projectCreate.project.id,
+                name: response.projectCreate.project.name,
+                url: response.projectCreate.project.url,
+            },
+        };
+        return createProjectOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.update_project ────────────────────────────────────────────────────
+const UPDATE_PROJECT_MUTATION = `
+  mutation ProjectUpdate($id: String!, $input: ProjectUpdateInput!) {
+    projectUpdate(id: $id, input: $input) {
+      success
+      project {
+        id
+        name
+        url
+      }
+    }
+  }
+`;
+const updateProjectInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Project ID"),
+    name: safeText("New name").optional(),
+    description: safeText("Full project description (Markdown)").optional(),
+    summary: safeText("Concise plaintext summary (max 255 chars)").optional(),
+    lead: safeFilter('User ID, name, email, or "me"'),
+    state: safeFilter("State of the project"),
+    startDate: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Start date (ISO format)"),
+    targetDate: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Target date (ISO format)"),
+    priority: z.number().min(0).max(4).optional().describe("0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low"),
+    labels: z
+        .array(z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected"))
+        .optional()
+        .describe("Label names or IDs"),
+});
+const updateProjectOutput = z.object({
+    success: z.boolean(),
+    project: z.object({ id: z.string(), name: z.string(), url: z.string() }),
+    estimatedTokens: z.number(),
+});
+export const updateProject = {
+    id: "linear.update_project",
+    name: "Update Linear Project",
+    description: "Update an existing project in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: updateProjectInput,
+    output: updateProjectOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const { id, ...updateInput } = args;
+        const response = await linearGraphQL(apiKey, UPDATE_PROJECT_MUTATION, {
+            id,
+            input: updateInput,
+        });
+        if (!response.projectUpdate.success) {
+            throw new Error("Failed to update project");
+        }
+        const baseData = {
+            success: true,
+            project: {
+                id: response.projectUpdate.project.id,
+                name: response.projectUpdate.project.name,
+                url: response.projectUpdate.project.url,
+            },
+        };
+        return updateProjectOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.delete_project ────────────────────────────────────────────────────
+const DELETE_PROJECT_MUTATION = `
+  mutation ProjectDelete($id: String!) {
+    projectDelete(id: $id) {
+      success
+    }
+  }
+`;
+const deleteProjectInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Project UUID to delete"),
+});
+const deleteProjectOutput = z.object({
+    success: z.boolean(),
+    estimatedTokens: z.number(),
+});
+export const deleteProject = {
+    id: "linear.delete_project",
+    name: "Delete Linear Project",
+    description: "Delete a project in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: deleteProjectInput,
+    output: deleteProjectOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, DELETE_PROJECT_MUTATION, {
+            id: args.id,
+        });
+        if (!response.projectDelete.success) {
+            throw new Error("Failed to delete project");
+        }
+        const baseData = { success: true };
+        return deleteProjectOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.archive_project ───────────────────────────────────────────────────
+const ARCHIVE_PROJECT_MUTATION = `
+  mutation ProjectArchive($id: String!) {
+    projectArchive(id: $id) {
+      success
+      entity {
+        id
+        name
+        archivedAt
+      }
+    }
+  }
+`;
+const archiveProjectInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Project ID or name"),
+});
+const archiveProjectOutput = z.object({
+    success: z.boolean(),
+    entity: z.object({
+        id: z.string(),
+        name: z.string(),
+        archivedAt: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const archiveProject = {
+    id: "linear.archive_project",
+    name: "Archive Linear Project",
+    description: "Archive a project in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: archiveProjectInput,
+    output: archiveProjectOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, ARCHIVE_PROJECT_MUTATION, {
+            id: args.id,
+        });
+        if (!response.projectArchive?.success || !response.projectArchive?.entity) {
+            throw new Error("Failed to archive project");
+        }
+        const baseData = {
+            success: response.projectArchive.success,
+            entity: {
+                id: response.projectArchive.entity.id,
+                name: response.projectArchive.entity.name,
+                archivedAt: response.projectArchive.entity.archivedAt,
+            },
+        };
+        return archiveProjectOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
