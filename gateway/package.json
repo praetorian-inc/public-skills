@@ -1,0 +1,36 @@
+{
+  "name": "@praetorian/capability-gateway",
+  "version": "0.0.1",
+  "description": "Harness-agnostic MCP capability gateway: runtime discovery + invocation over an agentsmesh catalog of skills and tools.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "capability-gateway": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate-manifest": "tsx scripts/generate-manifest.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@orama/orama": "3.1.18",
+    "yaml": "2.9.0",
+    "zod": "3.25.76",
+    "zod-to-json-schema": "3.25.2"
+  },
+  "devDependencies": {
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
