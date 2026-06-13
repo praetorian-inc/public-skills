@@ -28,6 +28,7 @@ import {
   getPost,
   createComment,
   updateCollection,
+  updateComment,
   deletePost,
   __setFetch,
   __resetFetch,
@@ -220,6 +221,52 @@ describe("featurebase PATCH branch (fbPatch)", () => {
     const headers = captured.init?.headers as Record<string, string>;
     expect(headers["Content-Type"]).toBe("application/json");
     expect(JSON.parse(captured.init?.body as string).name).toBe("Renamed");
+  });
+
+  it("updateComment: PATCH + form-encoded (the PATCH×form intersection)", async () => {
+    const captured: { url?: string; init?: RequestInit } = {};
+    const COMMENT_OK = {
+      id: "cmt_1",
+      content: "edited",
+      isPinned: true,
+      isPrivate: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-02T00:00:00.000Z",
+      author: { id: "u1", name: "Alice", email: "alice@example.com" },
+      upvotes: 0,
+      downvotes: 0,
+      score: 0,
+    };
+    __setFetch(fakeFetch(COMMENT_OK, captured));
+
+    const result = await updateComment.handler(
+      { commentId: "cmt_1", content: "edited", isPinned: true, isPrivate: false },
+      { secrets: { FEATUREBASE_API_KEY: "fb_test_key" } },
+    );
+
+    // PATCH half of the intersection
+    expect(captured.init?.method).toBe("PATCH");
+    // form-encoded half of the intersection
+    const headers = captured.init?.headers as Record<string, string>;
+    const contentType = headers["Content-Type"] ?? headers["content-type"];
+    expect(contentType).toBe("application/x-www-form-urlencoded");
+    // correct URL
+    expect(captured.url).toBe("https://do.featurebase.app/v2/comment/cmt_1");
+    // auth: X-API-Key, no Authorization
+    expect(headers["X-API-Key"]).toBe("fb_test_key");
+    expect(headers["Authorization"]).toBeUndefined();
+    // body decodes to the right keys
+    const body = new URLSearchParams(captured.init?.body as string);
+    expect(body.get("content")).toBe("edited");
+    expect(body.get("isPinned")).toBe("true");
+    expect(body.get("isPrivate")).toBe("false");
+    // output parses against updateComment.output
+    const out = updateComment.output.parse(result);
+    expect(out.id).toBe("cmt_1");
+    expect(out.content).toBe("edited");
+    expect(out.isPinned).toBe(true);
+    expect(out.isPrivate).toBe(false);
+    expect(typeof out.estimatedTokens).toBe("number");
   });
 });
 
