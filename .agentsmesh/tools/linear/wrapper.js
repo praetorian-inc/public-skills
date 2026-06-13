@@ -1833,3 +1833,739 @@ export const archiveProject = {
         return archiveProjectOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
     },
 };
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 3 — Templates family (list_project_templates / get_template /
+// create_project_from_template) and Cycles family (list_cycles / get_cycle /
+// create_cycle / update_cycle). Ported from the marketplace
+// `core/tools/linear/{list-project-templates,get-template,create-project-from-template,
+// list-cycles,get-cycle,create-cycle,update-cycle}.ts`. GraphQL strings, Zod
+// shapes, and output maps are carried verbatim; the `init.js` side-effect +
+// `createLinearClient()` + `executeGraphQL` + `testToken` are replaced by the
+// shared CTX-only `linearGraphQL(apiKey, …)` transport. Only
+// `create_project_from_template` resolves a team id (`resolveTeamId`) — matching
+// its marketplace source; every other tool passes raw ids (cycles `team`,
+// template/cycle/project ids), exactly as the sources do (no resolver added).
+// ════════════════════════════════════════════════════════════════════════════
+// ── linear.list_project_templates ────────────────────────────────────────────
+const LIST_TEMPLATES_QUERY = `
+  query Templates {
+    templates {
+      id
+      name
+      description
+      type
+      templateData
+      createdAt
+      updatedAt
+    }
+  }
+`;
+const listProjectTemplatesInput = z.object({
+    type: z
+        .enum(["project", "issue", "all"])
+        .optional()
+        .describe('Template type to filter: "project" (default), "issue", or "all"'),
+    limit: z
+        .number()
+        .min(1)
+        .max(250)
+        .optional()
+        .describe("Maximum templates to return (client-side limit)"),
+    fullDescription: z
+        .boolean()
+        .optional()
+        .describe("Return full description without truncation (default: false for token efficiency)"),
+    includeContent: z
+        .boolean()
+        .optional()
+        .describe("Include parsed template content with all fields (default: false for token efficiency)"),
+    projectId: safeFilter("Filter templates by associated project ID from templateData"),
+});
+const LIST_TEMPLATES_DEFAULT_TYPE = "project";
+const LIST_TEMPLATES_DEFAULT_LIMIT = 50;
+const listProjectTemplatesOutput = z.object({
+    templates: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        type: z.string(),
+        projectId: z.string().optional(),
+        teamId: z.string().optional(),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+        content: z
+            .object({
+            title: z.string().optional(),
+            descriptionData: z.unknown().optional(),
+            descriptionText: z.string().optional(),
+            stateId: z.string().optional(),
+            statusId: z.string().optional(),
+            priority: z.number().optional(),
+            labelIds: z.array(z.string()).optional(),
+            initiativeIds: z.array(z.string()).optional(),
+            memberIds: z.array(z.string()).optional(),
+            teamIds: z.array(z.string()).optional(),
+            projectMilestones: z.array(z.unknown()).optional(),
+            initialIssues: z.array(z.unknown()).optional(),
+        })
+            .optional(),
+    })),
+    totalTemplates: z.number(),
+    estimatedTokens: z.number(),
+});
+/** Parse templateData (JSON string or object) into a typed shape; null on failure. */
+function parseListedTemplateData(raw) {
+    if (!raw)
+        return null;
+    if (typeof raw === "string") {
+        try {
+            return JSON.parse(raw);
+        }
+        catch {
+            return null;
+        }
+    }
+    if (typeof raw === "object") {
+        return raw;
+    }
+    return null;
+}
+export const listProjectTemplates = {
+    id: "linear.list_project_templates",
+    name: "List Linear Project Templates",
+    description: "List project templates from Linear workspace",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: listProjectTemplatesInput,
+    output: listProjectTemplatesOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        // API doesn't support variables; returns ALL templates. Filtering is client-side.
+        const response = await linearGraphQL(apiKey, LIST_TEMPLATES_QUERY, {});
+        let templates = response.templates || [];
+        // Apply type filter (client-side).
+        const typeFilter = args.type ?? LIST_TEMPLATES_DEFAULT_TYPE;
+        if (typeFilter !== "all") {
+            templates = templates.filter((t) => t.type === typeFilter);
+        }
+        // Parse templateData and extract projectId/teamId.
+        const templatesWithParsedData = templates.map((template) => {
+            const parsedData = parseListedTemplateData(template.templateData);
+            return {
+                ...template,
+                projectId: parsedData?.projectId,
+                teamId: parsedData?.teamId,
+                parsedData,
+            };
+        });
+        // Apply projectId filter if specified.
+        const projectIdFilter = args.projectId;
+        const filteredTemplates = projectIdFilter
+            ? templatesWithParsedData.filter((t) => t.projectId === projectIdFilter)
+            : templatesWithParsedData;
+        // Apply client-side limit.
+        const limit = args.limit ?? LIST_TEMPLATES_DEFAULT_LIMIT;
+        const limitedTemplates = filteredTemplates.slice(0, limit);
+        const fullDescription = args.fullDescription ?? false;
+        const includeContent = args.includeContent ?? false;
+        const baseData = {
+            templates: limitedTemplates.map((template) => {
+                const parsedData = template.parsedData;
+                const templateObj = {
+                    id: template.id,
+                    name: template.name,
+                    description: fullDescription
+                        ? template.description || undefined
+                        : template.description?.substring(0, 200) || undefined,
+                    type: template.type || "unknown",
+                    projectId: template.projectId || undefined,
+                    teamId: template.teamId || undefined,
+                    createdAt: template.createdAt || undefined,
+                    updatedAt: template.updatedAt || undefined,
+                };
+                if (includeContent && parsedData) {
+                    templateObj.content = {
+                        title: parsedData.title,
+                        descriptionData: parsedData.descriptionData,
+                        descriptionText: parsedData.descriptionText,
+                        stateId: parsedData.stateId,
+                        statusId: parsedData.statusId,
+                        priority: parsedData.priority,
+                        labelIds: parsedData.labelIds,
+                        initiativeIds: parsedData.initiativeIds,
+                        memberIds: parsedData.memberIds,
+                        teamIds: parsedData.teamIds,
+                        projectMilestones: parsedData.projectMilestones,
+                        initialIssues: parsedData.initialIssues,
+                    };
+                }
+                return templateObj;
+            }),
+            totalTemplates: limitedTemplates.length,
+        };
+        return listProjectTemplatesOutput.parse({
+            ...baseData,
+            estimatedTokens: estimateTokens(baseData),
+        });
+    },
+};
+// ── linear.get_template ──────────────────────────────────────────────────────
+const GET_TEMPLATE_QUERY = `
+  query Template($id: String!) {
+    template(id: $id) {
+      id
+      name
+      description
+      type
+      templateData
+      team {
+        id
+        name
+      }
+      createdAt
+      updatedAt
+    }
+  }
+`;
+const getTemplateInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Template ID (UUID)"),
+});
+const getTemplateOutput = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(["project", "issue", "recurringIssue"]),
+    description: z.string().optional(),
+    content: z.object({
+        title: z.string().optional(),
+        descriptionData: z.object({}).passthrough().optional(),
+        descriptionText: z.string().optional(),
+        stateId: z.string().optional(),
+        statusId: z.string().optional(),
+        priority: z.number().optional(),
+        projectId: z.string().optional(),
+        teamId: z.string().optional(),
+        labelIds: z.array(z.string()).optional(),
+    }),
+    team: z.object({ id: z.string(), name: z.string() }).optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    estimatedTokens: z.number(),
+});
+/** Parse templateData (JSON string or object) into a record; empty object on failure. */
+function parseTemplateRecord(raw) {
+    if (!raw)
+        return {};
+    if (typeof raw === "string") {
+        try {
+            return JSON.parse(raw);
+        }
+        catch {
+            return {};
+        }
+    }
+    if (typeof raw === "object") {
+        return raw;
+    }
+    return {};
+}
+/** Extract plain text from ProseMirror descriptionData. */
+function extractPlainText(descriptionData) {
+    if (!descriptionData || typeof descriptionData !== "object") {
+        return undefined;
+    }
+    const data = descriptionData;
+    if (!data.content || !Array.isArray(data.content)) {
+        return undefined;
+    }
+    const texts = [];
+    for (const node of data.content) {
+        if (node.content && Array.isArray(node.content)) {
+            for (const textNode of node.content) {
+                if (textNode.text) {
+                    texts.push(textNode.text);
+                }
+            }
+        }
+    }
+    return texts.length > 0 ? texts.join("\n") : undefined;
+}
+export const getTemplate = {
+    id: "linear.get_template",
+    name: "Get Linear Template",
+    description: "Get detailed information about a specific Linear template",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: getTemplateInput,
+    output: getTemplateOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, GET_TEMPLATE_QUERY, {
+            id: args.id,
+        });
+        if (!response.template) {
+            throw new Error(`Template not found: ${args.id}`);
+        }
+        const parsedData = parseTemplateRecord(response.template.templateData);
+        const descriptionText = parsedData.descriptionData
+            ? extractPlainText(parsedData.descriptionData)
+            : undefined;
+        const content = {
+            title: typeof parsedData.title === "string" ? parsedData.title : undefined,
+            descriptionData: typeof parsedData.descriptionData === "object"
+                ? parsedData.descriptionData
+                : undefined,
+            descriptionText,
+            stateId: typeof parsedData.stateId === "string" ? parsedData.stateId : undefined,
+            statusId: typeof parsedData.statusId === "string" ? parsedData.statusId : undefined,
+            priority: typeof parsedData.priority === "number" ? parsedData.priority : undefined,
+            projectId: typeof parsedData.projectId === "string" ? parsedData.projectId : undefined,
+            teamId: typeof parsedData.teamId === "string" ? parsedData.teamId : undefined,
+            labelIds: Array.isArray(parsedData.labelIds)
+                ? parsedData.labelIds
+                : undefined,
+        };
+        const baseData = {
+            id: response.template.id,
+            name: response.template.name,
+            type: (response.template.type || "issue"),
+            description: response.template.description || undefined,
+            content,
+            team: response.template.team
+                ? { id: response.template.team.id, name: response.template.team.name }
+                : undefined,
+            createdAt: response.template.createdAt || "",
+            updatedAt: response.template.updatedAt || "",
+        };
+        return getTemplateOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.create_project_from_template ──────────────────────────────────────
+const CREATE_PROJECT_FROM_TEMPLATE_MUTATION = `
+  mutation ProjectCreate($input: ProjectCreateInput!) {
+    projectCreate(input: $input) {
+      success
+      project {
+        id
+        name
+        url
+      }
+    }
+  }
+`;
+const createProjectFromTemplateInput = z.object({
+    templateId: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Project template ID to create from"),
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .describe("Project name"),
+    team: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Team name or ID"),
+    description: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Override template description"),
+    lead: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe('User ID, name, email, or "me"'),
+    startDate: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Override start date (ISO format)"),
+    targetDate: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Override target date (ISO format)"),
+});
+const createProjectFromTemplateOutput = z.object({
+    success: z.boolean(),
+    project: z.object({ id: z.string(), name: z.string(), url: z.string() }),
+    estimatedTokens: z.number(),
+});
+export const createProjectFromTemplate = {
+    id: "linear.create_project_from_template",
+    name: "Create Linear Project From Template",
+    description: "Create a new project from a template in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createProjectFromTemplateInput,
+    output: createProjectFromTemplateOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const teamId = await resolveTeamId(apiKey, args.team);
+        const mutationInput = {
+            name: args.name,
+            teamIds: [teamId],
+            templateId: args.templateId,
+        };
+        if (args.description) {
+            mutationInput.description = args.description;
+        }
+        if (args.lead) {
+            mutationInput.leadId = args.lead;
+        }
+        if (args.startDate) {
+            mutationInput.startDate = args.startDate;
+        }
+        if (args.targetDate) {
+            mutationInput.targetDate = args.targetDate;
+        }
+        const response = await linearGraphQL(apiKey, CREATE_PROJECT_FROM_TEMPLATE_MUTATION, { input: mutationInput });
+        if (!response.projectCreate?.success || !response.projectCreate?.project) {
+            throw new Error("Failed to create project from template");
+        }
+        const baseData = {
+            success: response.projectCreate.success,
+            project: {
+                id: response.projectCreate.project.id,
+                name: response.projectCreate.project.name,
+                url: response.projectCreate.project.url,
+            },
+        };
+        return createProjectFromTemplateOutput.parse({
+            ...baseData,
+            estimatedTokens: estimateTokens(baseData),
+        });
+    },
+};
+// ── linear.list_cycles ───────────────────────────────────────────────────────
+const LIST_CYCLES_QUERY = `
+  query Cycles($filter: CycleFilter) {
+    cycles(filter: $filter) {
+      nodes {
+        id
+        name
+        number
+        team {
+          id
+          name
+        }
+        startsAt
+        endsAt
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+const listCyclesInput = z.object({
+    team: safeFilter("Team name or ID"),
+    query: safeFilter("Search query for cycle name"),
+    includeArchived: z.boolean().optional(),
+    limit: z.number().min(1).max(250).optional(),
+});
+const listCyclesOutput = z.object({
+    cycles: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        number: z.number().optional(),
+        team: z.object({ id: z.string(), name: z.string() }).optional(),
+        startsAt: z.string().optional(),
+        endsAt: z.string().optional(),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+    })),
+    totalCycles: z.number(),
+    estimatedTokens: z.number(),
+});
+export const listCycles = {
+    id: "linear.list_cycles",
+    name: "List Linear Cycles",
+    description: "List cycles from Linear workspace",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: listCyclesInput,
+    output: listCyclesOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        // Build filter object (Linear API expects a specific CycleFilter shape).
+        const filter = {};
+        if (args.team) {
+            filter.team = { name: { eq: args.team } };
+        }
+        if (args.query) {
+            filter.name = { contains: args.query };
+        }
+        if (args.includeArchived !== undefined) {
+            filter.includeArchived = args.includeArchived;
+        }
+        const response = await linearGraphQL(apiKey, LIST_CYCLES_QUERY, Object.keys(filter).length > 0 ? { filter } : {});
+        const cycles = response.cycles?.nodes || [];
+        const baseData = {
+            cycles: cycles.map((cycle) => ({
+                id: cycle.id,
+                name: cycle.name,
+                number: cycle.number ?? undefined,
+                team: cycle.team ? { id: cycle.team.id, name: cycle.team.name } : undefined,
+                startsAt: cycle.startsAt ?? undefined,
+                endsAt: cycle.endsAt ?? undefined,
+                createdAt: cycle.createdAt ?? undefined,
+                updatedAt: cycle.updatedAt ?? undefined,
+            })),
+            totalCycles: cycles.length,
+        };
+        return listCyclesOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.get_cycle ─────────────────────────────────────────────────────────
+const GET_CYCLE_QUERY = `
+  query Cycle($id: String!) {
+    cycle(id: $id) {
+      id
+      name
+      description
+      number
+      team {
+        id
+        name
+      }
+      startsAt
+      endsAt
+      createdAt
+      updatedAt
+    }
+  }
+`;
+const getCycleInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Cycle UUID"),
+});
+const getCycleOutput = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().optional(),
+    number: z.number().optional(),
+    team: z.object({ id: z.string(), name: z.string() }).optional(),
+    startsAt: z.string().optional(),
+    endsAt: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    estimatedTokens: z.number(),
+});
+export const getCycle = {
+    id: "linear.get_cycle",
+    name: "Get Linear Cycle",
+    description: "Get detailed information about a specific Linear cycle",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: getCycleInput,
+    output: getCycleOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, GET_CYCLE_QUERY, { id: args.id });
+        if (!response.cycle) {
+            throw new Error(`Cycle not found: ${args.id}`);
+        }
+        const baseData = {
+            id: response.cycle.id,
+            name: response.cycle.name,
+            description: response.cycle.description ?? undefined,
+            number: response.cycle.number ?? undefined,
+            team: response.cycle.team
+                ? { id: response.cycle.team.id, name: response.cycle.team.name }
+                : undefined,
+            startsAt: response.cycle.startsAt ?? undefined,
+            endsAt: response.cycle.endsAt ?? undefined,
+            createdAt: response.cycle.createdAt ?? undefined,
+            updatedAt: response.cycle.updatedAt ?? undefined,
+        };
+        return getCycleOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.create_cycle ──────────────────────────────────────────────────────
+const CREATE_CYCLE_MUTATION = `
+  mutation CycleCreate($input: CycleCreateInput!) {
+    cycleCreate(input: $input) {
+      success
+      cycle {
+        id
+        name
+        url
+      }
+    }
+  }
+`;
+const createCycleInput = z.object({
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .describe("Cycle name"),
+    description: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Cycle description"),
+    team: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Team name or ID"),
+    startsAt: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Start date (ISO format)"),
+    endsAt: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("End date (ISO format)"),
+});
+const createCycleOutput = z.object({
+    success: z.boolean(),
+    cycle: z.object({ id: z.string(), name: z.string(), url: z.string() }),
+    estimatedTokens: z.number(),
+});
+export const createCycle = {
+    id: "linear.create_cycle",
+    name: "Create Linear Cycle",
+    description: "Create a new cycle in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createCycleInput,
+    output: createCycleOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        // Marketplace source passes the validated input through verbatim as the
+        // CycleCreateInput (team sent raw — NO resolver). Mirror that behavior.
+        const response = await linearGraphQL(apiKey, CREATE_CYCLE_MUTATION, {
+            input: args,
+        });
+        if (!response.cycleCreate.success) {
+            throw new Error("Failed to create cycle");
+        }
+        const baseData = {
+            success: true,
+            cycle: {
+                id: response.cycleCreate.cycle.id,
+                name: response.cycleCreate.cycle.name,
+                url: response.cycleCreate.cycle.url,
+            },
+        };
+        return createCycleOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ── linear.update_cycle ──────────────────────────────────────────────────────
+const UPDATE_CYCLE_MUTATION = `
+  mutation UpdateCycle($id: String!, $input: CycleUpdateInput!) {
+    cycleUpdate(id: $id, input: $input) {
+      success
+      cycle {
+        id
+        name
+        number
+        team {
+          id
+          name
+        }
+        startsAt
+        endsAt
+        updatedAt
+      }
+    }
+  }
+`;
+const updateCycleInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Cycle UUID to update"),
+    name: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("New name for the cycle"),
+    startsAt: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("New start date (ISO format)"),
+    endsAt: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("New end date (ISO format)"),
+});
+const updateCycleOutput = z.object({
+    id: z.string(),
+    name: z.string(),
+    number: z.number().optional(),
+    team: z.object({ id: z.string(), name: z.string() }).optional(),
+    startsAt: z.string().optional(),
+    endsAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    estimatedTokens: z.number(),
+});
+export const updateCycle = {
+    id: "linear.update_cycle",
+    name: "Update Linear Cycle",
+    description: "Update a cycle in Linear workspace",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: updateCycleInput,
+    output: updateCycleOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        // Build mutation input (only include fields that were provided).
+        const mutationInput = {};
+        if (args.name !== undefined)
+            mutationInput.name = args.name;
+        if (args.startsAt !== undefined)
+            mutationInput.startsAt = args.startsAt;
+        if (args.endsAt !== undefined)
+            mutationInput.endsAt = args.endsAt;
+        const response = await linearGraphQL(apiKey, UPDATE_CYCLE_MUTATION, {
+            id: args.id,
+            input: mutationInput,
+        });
+        if (!response.cycleUpdate.cycle) {
+            throw new Error(`Cycle not found: ${args.id}`);
+        }
+        const baseData = {
+            id: response.cycleUpdate.cycle.id,
+            name: response.cycleUpdate.cycle.name,
+            number: response.cycleUpdate.cycle.number,
+            team: response.cycleUpdate.cycle.team
+                ? { id: response.cycleUpdate.cycle.team.id, name: response.cycleUpdate.cycle.team.name }
+                : undefined,
+            startsAt: response.cycleUpdate.cycle.startsAt,
+            endsAt: response.cycleUpdate.cycle.endsAt,
+            updatedAt: response.cycleUpdate.cycle.updatedAt,
+        };
+        return updateCycleOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};

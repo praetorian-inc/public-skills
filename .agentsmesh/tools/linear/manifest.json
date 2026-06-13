@@ -135,6 +135,90 @@
       "schemaHash": "7d65aeed3fd6e0a16e64997f4e7cafb944df710cb3b2e2389f48d35242485b91"
     },
     {
+      "id": "linear.create_cycle",
+      "name": "Create Linear Cycle",
+      "description": "Create a new cycle in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Cycle name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Cycle description"
+          },
+          "team": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Team name or ID"
+          },
+          "startsAt": {
+            "type": "string",
+            "description": "Start date (ISO format)"
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "End date (ISO format)"
+          }
+        },
+        "required": [
+          "name",
+          "team"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "cycle": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "cycle",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createCycle",
+      "schemaHash": "29adc00a0a5b47fb83d6126fd768c5f8e6098e8ad3256962c35a092dfaa6bb44"
+    },
+    {
       "id": "linear.create_issue",
       "name": "Create Linear Issue",
       "description": "Create a new issue in Linear",
@@ -369,6 +453,99 @@
       },
       "entry": "wrapper.ts#createProject",
       "schemaHash": "4d86ebb4e205f0da83a4d05b3b82fb0f5364733f84e9d145a50dd16845016f90"
+    },
+    {
+      "id": "linear.create_project_from_template",
+      "name": "Create Linear Project From Template",
+      "description": "Create a new project from a template in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Project template ID to create from"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Project name"
+          },
+          "team": {
+            "type": "string",
+            "description": "Team name or ID"
+          },
+          "description": {
+            "type": "string",
+            "description": "Override template description"
+          },
+          "lead": {
+            "type": "string",
+            "description": "User ID, name, email, or \"me\""
+          },
+          "startDate": {
+            "type": "string",
+            "description": "Override start date (ISO format)"
+          },
+          "targetDate": {
+            "type": "string",
+            "description": "Override target date (ISO format)"
+          }
+        },
+        "required": [
+          "templateId",
+          "name",
+          "team"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "project",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createProjectFromTemplate",
+      "schemaHash": "941de8c1fcb6eee6ff3064584daab96786d5d87251045ae4c63d85d22258ba31"
     },
     {
       "id": "linear.delete_project",
@@ -754,6 +931,89 @@
       "schemaHash": "71aab25c8012f6670b81de8c6554ae1bc63e2bdd7cfd81d54861a35cd9b29770"
     },
     {
+      "id": "linear.get_cycle",
+      "name": "Get Linear Cycle",
+      "description": "Get detailed information about a specific Linear cycle",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Cycle UUID"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "number": {
+            "type": "number"
+          },
+          "team": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "startsAt": {
+            "type": "string"
+          },
+          "endsAt": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getCycle",
+      "schemaHash": "06815e495c5071b2b1cd37950bec16814d05b139685f2ef65bd48f9b60de7cc6"
+    },
+    {
       "id": "linear.get_issue",
       "name": "Get Linear Issue",
       "description": "Get detailed information about a specific Linear issue",
@@ -1084,6 +1344,234 @@
       "schemaHash": "37b3c27a1d60b32fce07ca2b9ef40132bb16aff48b85f66b633359235bcf0526"
     },
     {
+      "id": "linear.get_template",
+      "name": "Get Linear Template",
+      "description": "Get detailed information about a specific Linear template",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Template ID (UUID)"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "project",
+              "issue",
+              "recurringIssue"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "descriptionData": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+              },
+              "descriptionText": {
+                "type": "string"
+              },
+              "stateId": {
+                "type": "string"
+              },
+              "statusId": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "number"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "teamId": {
+                "type": "string"
+              },
+              "labelIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "team": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "content",
+          "createdAt",
+          "updatedAt",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getTemplate",
+      "schemaHash": "66d3116a0f7fe4aff95ce218ab037f50b0f6d7a1084bb636a632d28022c5c89f"
+    },
+    {
+      "id": "linear.list_cycles",
+      "name": "List Linear Cycles",
+      "description": "List cycles from Linear workspace",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "team": {
+            "type": "string",
+            "description": "Team name or ID"
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query for cycle name"
+          },
+          "includeArchived": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 250
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "cycles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                },
+                "team": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                "startsAt": {
+                  "type": "string"
+                },
+                "endsAt": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalCycles": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "cycles",
+          "totalCycles",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listCycles",
+      "schemaHash": "dfee6b7b589523768c1ea59eb883bc383eb3f5bcbdb6282804bc28a939b8e12e"
+    },
+    {
       "id": "linear.list_issues",
       "name": "List Linear Issues",
       "description": "List issues from Linear with optional filters (team, assignee, state, query, …).",
@@ -1306,6 +1794,163 @@
       "schemaHash": "d5f62a1c2cba9aada2ecd8ca85166efd8f3681d95e211bd3875deca29f042716"
     },
     {
+      "id": "linear.list_project_templates",
+      "name": "List Linear Project Templates",
+      "description": "List project templates from Linear workspace",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "project",
+              "issue",
+              "all"
+            ],
+            "description": "Template type to filter: \"project\" (default), \"issue\", or \"all\""
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 250,
+            "description": "Maximum templates to return (client-side limit)"
+          },
+          "fullDescription": {
+            "type": "boolean",
+            "description": "Return full description without truncation (default: false for token efficiency)"
+          },
+          "includeContent": {
+            "type": "boolean",
+            "description": "Include parsed template content with all fields (default: false for token efficiency)"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Filter templates by associated project ID from templateData"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "descriptionData": {},
+                    "descriptionText": {
+                      "type": "string"
+                    },
+                    "stateId": {
+                      "type": "string"
+                    },
+                    "statusId": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": "number"
+                    },
+                    "labelIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "initiativeIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "memberIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "teamIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projectMilestones": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "initialIssues": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalTemplates": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "templates",
+          "totalTemplates",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listProjectTemplates",
+      "schemaHash": "42543eff58db142de14d7b335dd65336196a89ac15561281d28c12665f71e7a1"
+    },
+    {
       "id": "linear.list_projects",
       "name": "List Linear Projects",
       "description": "List projects from Linear workspace",
@@ -1507,6 +2152,95 @@
       },
       "entry": "wrapper.ts#unarchiveIssue",
       "schemaHash": "7175e3e83c8e4f09b88e7f7f5c747f4ed99e5a0b4e59c249eaf602f3b1e25542"
+    },
+    {
+      "id": "linear.update_cycle",
+      "name": "Update Linear Cycle",
+      "description": "Update a cycle in Linear workspace",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Cycle UUID to update"
+          },
+          "name": {
+            "type": "string",
+            "description": "New name for the cycle"
+          },
+          "startsAt": {
+            "type": "string",
+            "description": "New start date (ISO format)"
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "New end date (ISO format)"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "number": {
+            "type": "number"
+          },
+          "team": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "startsAt": {
+            "type": "string"
+          },
+          "endsAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateCycle",
+      "schemaHash": "2a30e1990c878f6cc2b309ee2a300a4dea07f938d8acfb6dc67fdb98c0469056"
     },
     {
       "id": "linear.update_issue",
