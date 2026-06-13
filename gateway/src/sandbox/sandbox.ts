@@ -39,22 +39,33 @@ export interface SandboxDeps {
 const NONCLONABLE_PREFIX = "__NONCLONABLE__";
 
 /**
- * Wrap model source so its value is marshaled out as a JSON string. A bare
- * expression or an explicit `return` both work. Functions/symbols (and circular
- * objects, which make `JSON.stringify` throw) are rejected here so a
- * non-clonable return surfaces as `sandbox_error` rather than silently becoming
- * `undefined`. The `{ v: ... }` envelope lets the host tell a legitimate
- * `undefined` return apart from a dropped value.
+ * The marshal tail: given a computed `__ret`, reject non-serializable types and
+ * JSON-marshal the value in a `{ v: ... }` envelope (so the host can tell a
+ * legitimate `undefined` return apart from a dropped value).
  */
-function wrap(source: string): string {
-  return `
-const __ret = (function () { return ( ${source} \n); })();
+const MARSHAL_TAIL = `
 const __t = typeof __ret;
 if (__t === "function" || __t === "symbol") {
   throw new Error(${JSON.stringify(NONCLONABLE_PREFIX)} + ":" + __t);
 }
 JSON.stringify({ v: __ret });
 `;
+
+/**
+ * Expression form: the whole source is one expression whose value is the result
+ * (`1 + 1`, `caps.echo.echo({...})`, `(() => {...})()`).
+ */
+function wrapExpression(source: string): string {
+  return `const __ret = ( ${source} \n);\n${MARSHAL_TAIL}`;
+}
+
+/**
+ * Body form: the source is a function body using `return` to produce a value,
+ * or statements with no value (`while (true) {}` → `undefined`). Used when the
+ * expression form fails to compile.
+ */
+function wrapBody(source: string): string {
+  return `const __ret = (function () { ${source} \n })();\n${MARSHAL_TAIL}`;
 }
 
 export class Sandbox {
@@ -97,9 +108,14 @@ export class Sandbox {
       context.global.setSync("__capCall", new ivm.Reference(hostCall));
 
       const toolIds = this.#deps.index.filter((e) => e.kind === "tool").map((e) => e.id);
-      const program = buildPreamble(toolIds) + "\n" + wrap(source);
+      const preamble = buildPreamble(toolIds) + "\n";
 
-      const script = isolate.compileScriptSync(program);
+      // Compile the source as an expression; if that's a syntax error (e.g. the
+      // program is statements like `while (true) {}` or uses `return`), fall back
+      // to the function-body form. Both compile attempts stay inside the catch so
+      // a genuine syntax error still surfaces as a coded sandbox_error.
+      const script = this.#compile(isolate, preamble, source);
+
       const json = (await script.run(context, {
         timeout: this.#limits.timeoutMs,
         copy: true,
@@ -111,7 +127,24 @@ export class Sandbox {
     } catch (e) {
       throw this.#mapError(e);
     } finally {
-      isolate.dispose();
+      // dispose() throws if the isolate already self-disposed (e.g. on OOM).
+      // Guard it so a finally-throw never masks the real error.
+      if (!isolate.isDisposed) {
+        try {
+          isolate.dispose();
+        } catch {
+          // already gone; nothing to do
+        }
+      }
+    }
+  }
+
+  /** Compile expression-form first; fall back to body-form on a syntax error. */
+  #compile(isolate: IVM.Isolate, preamble: string, source: string): IVM.Script {
+    try {
+      return isolate.compileScriptSync(preamble + wrapExpression(source));
+    } catch {
+      return isolate.compileScriptSync(preamble + wrapBody(source));
     }
   }
 
@@ -127,9 +160,10 @@ export class Sandbox {
     // isolated-vm's timeout message (§11.5: "Script execution timed out.").
     if (/timed out/i.test(message)) return sandboxTimeout(this.#limits.timeoutMs);
 
-    // V8 OOM inside the isolate (memoryLimit hit) surfaces as a RangeError about
-    // heap; isolated-vm also reports the isolate as disposed.
-    if (/out of memory|heap (out of memory|limit)|array buffer allocation failed/i.test(message)) {
+    // V8 OOM inside the isolate (memoryLimit hit). isolated-vm force-disposes the
+    // isolate and rejects with "Isolate was disposed during execution due to
+    // memory limit" (verified against isolated-vm@6.0.2).
+    if (/disposed during execution due to memory limit|out of memory|reached heap limit/i.test(message)) {
       return sandboxMemory(this.#limits.memoryLimitMb);
     }
 
