@@ -29,12 +29,12 @@ describe("bundled catalog default boot (WS-B / O5)", () => {
     bundleCatalog();
   });
 
-  it("buildIndex finds exactly the 40 tools and 7 skills", () => {
+  it("buildIndex finds exactly the 97 tools and 7 skills", () => {
     const index = buildIndex(BUNDLE_DIR);
     const skills = index.filter((e) => e.kind === "skill");
     const tools = index.filter((e) => e.kind === "tool");
     expect(skills.length).toBe(7);
-    expect(tools.length).toBe(40);
+    expect(tools.length).toBe(97);
     expect(tools.map((t) => t.id).sort()).toEqual(
       [
         "context7.get-library-docs",
@@ -77,6 +77,64 @@ describe("bundled catalog default boot (WS-B / O5)", () => {
         "featurebase.list_custom_fields",
         "featurebase.create_custom_field",
         "featurebase.list_boards",
+        // 57 new linear.* tools (ported from marketplace)
+        "linear.archive_issue",
+        "linear.archive_project",
+        "linear.createDocument",
+        "linear.create_attachment",
+        "linear.create_comment",
+        "linear.create_cycle",
+        "linear.create_favorite",
+        "linear.create_initiative",
+        "linear.create_issue",
+        "linear.create_issue_relation",
+        "linear.create_label",
+        "linear.create_project",
+        "linear.create_project_from_template",
+        "linear.create_reaction",
+        "linear.create_workflow_state",
+        "linear.delete_attachment",
+        "linear.delete_favorite",
+        "linear.delete_initiative",
+        "linear.delete_issue_relation",
+        "linear.delete_label",
+        "linear.delete_project",
+        "linear.delete_reaction",
+        "linear.documents",
+        "linear.find_issue",
+        "linear.find_user",
+        "linear.get_cycle",
+        "linear.get_document",
+        "linear.get_initiative",
+        "linear.get_issue",
+        "linear.get_label",
+        "linear.get_project",
+        "linear.get_team",
+        "linear.get_template",
+        "linear.get_workflow_state",
+        "linear.link_project_to_initiative",
+        "linear.list_attachments",
+        "linear.list_comments",
+        "linear.list_cycles",
+        "linear.list_initiatives",
+        "linear.list_issue_relations",
+        "linear.list_labels",
+        "linear.list_project_templates",
+        "linear.list_projects",
+        "linear.list_teams",
+        "linear.list_users",
+        "linear.list_workflow_states",
+        "linear.subscribe_to_issue",
+        "linear.unarchive_issue",
+        "linear.unsubscribe_from_issue",
+        "linear.updateDocument",
+        "linear.update_attachment",
+        "linear.update_cycle",
+        "linear.update_initiative",
+        "linear.update_issue",
+        "linear.update_label",
+        "linear.update_project",
+        "linear.update_workflow_state",
       ].sort(),
     );
   });
