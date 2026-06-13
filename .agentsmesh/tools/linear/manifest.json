@@ -675,6 +675,93 @@
       "schemaHash": "ad2bd37a6bf4019554e28db0f30d2dfc5480eddacd5259f0def66e3fb7071a7a"
     },
     {
+      "id": "linear.create_issue_relation",
+      "name": "Create Linear Issue Relation",
+      "description": "Create a relation between two issues in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue identifier (e.g., \"ISSUE-123\" or UUID)"
+          },
+          "relatedIssueId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Related issue identifier"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "blocks",
+              "blocked_by",
+              "duplicate",
+              "related"
+            ],
+            "description": "Relation type: blocks, blocked_by, duplicate, or related"
+          }
+        },
+        "required": [
+          "issueId",
+          "relatedIssueId",
+          "type"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "relation": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "issueId": {
+                "type": "string"
+              },
+              "relatedIssueId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "issueId",
+              "relatedIssueId"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "relation",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createIssueRelation",
+      "schemaHash": "2418af3dc32057f43560cec34dbfff9c266e75fa96df72535f4772603fce2060"
+    },
+    {
       "id": "linear.create_label",
       "name": "Create Linear Label",
       "description": "Create a new label in Linear",
@@ -1150,6 +1237,95 @@
       "schemaHash": "30881e8bb39b234ebc5822aeb5ecac74aefb541b7f0e28abb42c7f0cae1fe376"
     },
     {
+      "id": "linear.createDocument",
+      "name": "Create Linear Document",
+      "description": "Create a new document in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Document title"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Document content (Markdown)"
+          },
+          "project": {
+            "type": "string",
+            "description": "Project ID to link document to"
+          },
+          "initiative": {
+            "type": "string",
+            "description": "Initiative ID to link document to"
+          }
+        },
+        "required": [
+          "title",
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "document": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "slugId": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "document",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createDocument",
+      "schemaHash": "027f2ceb80de3278f9d8bddc78a4d97cec5ced05d99f6b3eb3679cdb9ff2c775"
+    },
+    {
       "id": "linear.delete_attachment",
       "name": "Delete Linear Attachment",
       "description": "Delete an attachment from Linear",
@@ -1285,6 +1461,51 @@
       "schemaHash": "2cb5ce41f8f7a0eed5c7ef0e16a626996bc98c93e6c541bd786a2959b74f86c7"
     },
     {
+      "id": "linear.delete_issue_relation",
+      "name": "Delete Linear Issue Relation",
+      "description": "Delete a relation between issues in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relationId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relation UUID to delete"
+          }
+        },
+        "required": [
+          "relationId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteIssueRelation",
+      "schemaHash": "e8b6ea582610ec54bf9320f85c203d38e901b8c4574ef61c5c9f29319b80822d"
+    },
+    {
       "id": "linear.delete_label",
       "name": "Delete Linear Label",
       "description": "Delete a label from Linear",
@@ -1418,6 +1639,92 @@
       },
       "entry": "wrapper.ts#deleteReaction",
       "schemaHash": "f9d355edb8d727bb7c8625b64eca8653b97d02a5a85bb987dd0e837b65bc6bd8"
+    },
+    {
+      "id": "linear.documents",
+      "name": "List Linear Documents",
+      "description": "List documents from Linear with optional filters",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "Project ID to filter by"
+          },
+          "initiative": {
+            "type": "string",
+            "description": "Initiative ID to filter by"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 250,
+            "description": "Number of results (max 250)"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "slugId": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalDocuments": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "documents",
+          "totalDocuments",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listDocuments",
+      "schemaHash": "65647a6857423e27198a3d4129bda71b4e8bef716338ca7049949fb55045ebfa"
     },
     {
       "id": "linear.find_issue",
@@ -1907,6 +2214,70 @@
       },
       "entry": "wrapper.ts#getCycle",
       "schemaHash": "06815e495c5071b2b1cd37950bec16814d05b139685f2ef65bd48f9b60de7cc6"
+    },
+    {
+      "id": "linear.get_document",
+      "name": "Get Linear Document",
+      "description": "Get detailed information about a specific Linear document",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Document ID or slug (e.g., doc-uuid-123 or security-review)"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "slugId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getDocument",
+      "schemaHash": "c9f1a7fe1cd1be1649c1e2ff7995213b4738f146a6acf6feead0204131bc6037"
     },
     {
       "id": "linear.get_initiative",
@@ -3082,6 +3453,88 @@
       },
       "entry": "wrapper.ts#listInitiatives",
       "schemaHash": "9172b1b352d021fc774b4293b6f36413d6352176ab74ad822000c8b1541d3f29"
+    },
+    {
+      "id": "linear.list_issue_relations",
+      "name": "List Linear Issue Relations",
+      "description": "List all relations for an issue in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue identifier (e.g., \"ISSUE-123\" or UUID)"
+          }
+        },
+        "required": [
+          "issueId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "relations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "relatedIssue": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "identifier": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "identifier",
+                    "title"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "relatedIssue"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "relations",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listIssueRelations",
+      "schemaHash": "4ac296ea6e00ee0bd52aef5074e21a421dc04d256e288ef909b3fba57a052ac3"
     },
     {
       "id": "linear.list_issues",
@@ -4828,6 +5281,86 @@
       },
       "entry": "wrapper.ts#updateWorkflowState",
       "schemaHash": "8fa6d6bf9cdf28e6427723c78f083435a5dd357ef216adf98e292d1bdfec22dc"
+    },
+    {
+      "id": "linear.updateDocument",
+      "name": "Update Linear Document",
+      "description": "Update an existing document in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Document ID or slug"
+          },
+          "title": {
+            "type": "string",
+            "description": "New title"
+          },
+          "content": {
+            "type": "string",
+            "description": "New content (Markdown)"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "document": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "slugId": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "document",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateDocument",
+      "schemaHash": "d5ee3898b4f59503b513ecaa346b4214e21e52eaa789f879cc6f1e4e395f9368"
     }
   ]
 }

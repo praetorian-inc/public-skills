@@ -6485,3 +6485,719 @@ export const linkProjectToInitiative: ToolDescriptor<
     });
   },
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 8 — Documents (list/get/create/update) + Issue Relations
+// (list/create/delete). Ported from the marketplace wrappers list-documents.ts,
+// get-document.ts, create-document.ts, update-document.ts, list-issue-relations.ts,
+// create-issue-relation.ts, delete-issue-relation.ts. Per §4, `id`/`name` are the
+// marketplace `name:` string VERBATIM (INCONSISTENT casing is intentional and
+// preserved): linear.documents / linear.get_document / linear.createDocument /
+// linear.updateDocument / linear.list_issue_relations / linear.create_issue_relation /
+// linear.delete_issue_relation. NONE call a resolver — raw IDs are passed straight to
+// GraphQL exactly as the source did. Adapter rules per Batch 1: testToken dropped,
+// signature (args, ctx), CTX-only ctx.secrets.LINEAR_API_KEY, HTTP via linearGraphQL,
+// no .default() on input (applied in handler), validator choices mirror each source.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── strict-ID field (mirrors marketplace 3-refine validator for IDs/filters) ──
+
+/** A strict reference/ID field: rejects control chars, path traversal, injection. */
+function safeStrictId(describe: string) {
+  return z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe(describe);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.documents  (marketplace name: "linear.documents" — NOT list_documents)
+// ════════════════════════════════════════════════════════════════════════════
+
+const LIST_DOCUMENTS_QUERY = `
+  query Documents($first: Int!, $filter: DocumentFilter) {
+    documents(first: $first, filter: $filter) {
+      nodes {
+        id
+        title
+        content
+        slugId
+        url
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+const listDocumentsInput = z.object({
+  project: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Project ID to filter by"),
+  initiative: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Initiative ID to filter by"),
+  // NOTE: marketplace had `.default(50)`; gateway forbids `.default()` on input — applied in handler.
+  limit: z.number().min(1).max(250).optional().describe("Number of results (max 250)"),
+});
+
+const DEFAULT_DOCUMENTS_LIMIT = 50;
+
+const listDocumentsOutput = z.object({
+  documents: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      content: z.string().optional(),
+      slugId: z.string().optional(),
+      url: z.string().optional(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+    }),
+  ),
+  totalDocuments: z.number(),
+  estimatedTokens: z.number(),
+});
+
+type ListDocumentsInput = z.infer<typeof listDocumentsInput>;
+type ListDocumentsOutput = z.infer<typeof listDocumentsOutput>;
+
+interface DocumentsResponse {
+  documents: {
+    nodes: Array<{
+      id: string;
+      title: string;
+      content?: string | null;
+      slugId?: string | null;
+      url?: string;
+      createdAt?: string;
+      updatedAt?: string;
+    }>;
+  };
+}
+
+export const listDocuments: ToolDescriptor<ListDocumentsInput, ListDocumentsOutput> = {
+  id: "linear.documents",
+  name: "List Linear Documents",
+  description: "List documents from Linear with optional filters",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: listDocumentsInput,
+  output: listDocumentsOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const filter: Record<string, unknown> = {};
+    if (args.project) {
+      filter.project = { id: { eq: args.project } };
+    }
+    if (args.initiative) {
+      filter.initiative = { id: { eq: args.initiative } };
+    }
+
+    const response = await linearGraphQL<DocumentsResponse>(apiKey, LIST_DOCUMENTS_QUERY, {
+      first: args.limit ?? DEFAULT_DOCUMENTS_LIMIT,
+      ...(Object.keys(filter).length > 0 ? { filter } : {}),
+    });
+
+    const transformedDocuments = response.documents.nodes.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      content: doc.content != null ? doc.content.substring(0, 200) : undefined,
+      slugId: doc.slugId || undefined,
+      url: doc.url,
+      createdAt: doc.createdAt ?? undefined,
+      updatedAt: doc.updatedAt ?? undefined,
+    }));
+
+    const baseData = {
+      documents: transformedDocuments,
+      totalDocuments: transformedDocuments.length,
+    };
+
+    return listDocumentsOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.get_document
+// ════════════════════════════════════════════════════════════════════════════
+
+const GET_DOCUMENT_QUERY = `
+  query Document($id: String!) {
+    document(id: $id) {
+      id
+      title
+      content
+      slugId
+      url
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const getDocumentInput = z.object({
+  id: safeStrictId("Document ID or slug (e.g., doc-uuid-123 or security-review)"),
+});
+
+const getDocumentOutput = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string().optional(),
+  slugId: z.string().optional(),
+  url: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  estimatedTokens: z.number(),
+});
+
+type GetDocumentInput = z.infer<typeof getDocumentInput>;
+type GetDocumentOutput = z.infer<typeof getDocumentOutput>;
+
+interface DocumentResponse {
+  document: {
+    id: string;
+    title: string;
+    content?: string | null;
+    slugId?: string | null;
+    url?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
+}
+
+export const getDocument: ToolDescriptor<GetDocumentInput, GetDocumentOutput> = {
+  id: "linear.get_document",
+  name: "Get Linear Document",
+  description: "Get detailed information about a specific Linear document",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: getDocumentInput,
+  output: getDocumentOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<DocumentResponse>(apiKey, GET_DOCUMENT_QUERY, {
+      id: args.id,
+    });
+
+    if (!response.document) {
+      throw new Error(`Document not found: ${args.id}`);
+    }
+
+    const baseData = {
+      id: response.document.id,
+      title: response.document.title,
+      content: response.document.content?.substring(0, 1000),
+      slugId: response.document.slugId || undefined,
+      url: response.document.url,
+      createdAt: response.document.createdAt,
+      updatedAt: response.document.updatedAt,
+    };
+
+    return getDocumentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.createDocument  (marketplace name: "linear.createDocument" — camelCase)
+// ════════════════════════════════════════════════════════════════════════════
+
+const CREATE_DOCUMENT_MUTATION = `
+  mutation DocumentCreate($title: String!, $content: String!, $projectId: String, $initiativeId: String) {
+    documentCreate(input: {
+      title: $title
+      content: $content
+      projectId: $projectId
+      initiativeId: $initiativeId
+    }) {
+      success
+      document {
+        id
+        title
+        slugId
+        url
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+const createDocumentInput = z.object({
+  // Title: block control chars + path traversal, but NO command-injection check (matches source).
+  title: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .describe("Document title"),
+  // Content is Markdown — allow whitespace control chars (tabs, newlines).
+  content: z
+    .string()
+    .min(1)
+    .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+    .describe("Document content (Markdown)"),
+  project: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Project ID to link document to"),
+  initiative: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Initiative ID to link document to"),
+});
+
+const createDocumentOutput = z.object({
+  success: z.boolean(),
+  document: z.object({
+    id: z.string(),
+    title: z.string(),
+    slugId: z.string().optional(),
+    url: z.string(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type CreateDocumentInput = z.infer<typeof createDocumentInput>;
+type CreateDocumentOutput = z.infer<typeof createDocumentOutput>;
+
+interface DocumentCreateResponse {
+  documentCreate: {
+    success: boolean;
+    document: {
+      id: string;
+      title: string;
+      slugId?: string | null;
+      url: string;
+      createdAt?: string | null;
+      updatedAt?: string | null;
+    };
+  };
+}
+
+export const createDocument: ToolDescriptor<CreateDocumentInput, CreateDocumentOutput> = {
+  id: "linear.createDocument",
+  name: "Create Linear Document",
+  description: "Create a new document in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: createDocumentInput,
+  output: createDocumentOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<DocumentCreateResponse>(apiKey, CREATE_DOCUMENT_MUTATION, {
+      title: args.title,
+      content: args.content,
+      projectId: args.project,
+      initiativeId: args.initiative,
+    });
+
+    if (!response.documentCreate.success) {
+      throw new Error("Failed to create document: Linear API returned success: false");
+    }
+
+    if (!response.documentCreate.document.id) {
+      throw new Error("Failed to create document: No document ID returned");
+    }
+
+    const baseData = {
+      success: true,
+      document: {
+        id: response.documentCreate.document.id,
+        title: response.documentCreate.document.title,
+        slugId: response.documentCreate.document.slugId || undefined,
+        url: response.documentCreate.document.url,
+        createdAt: response.documentCreate.document.createdAt || undefined,
+        updatedAt: response.documentCreate.document.updatedAt || undefined,
+      },
+    };
+
+    return createDocumentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.updateDocument  (marketplace name: "linear.updateDocument" — camelCase)
+// ════════════════════════════════════════════════════════════════════════════
+
+const UPDATE_DOCUMENT_MUTATION = `
+  mutation UpdateDocument($id: String!, $title: String, $content: String) {
+    documentUpdate(id: $id, input: { title: $title, content: $content }) {
+      success
+      document {
+        id
+        title
+        slugId
+        url
+        updatedAt
+      }
+    }
+  }
+`;
+
+const updateDocumentInput = z.object({
+  id: safeStrictId("Document ID or slug"),
+  // Title: block control chars + path traversal, NO command-injection check (matches source).
+  title: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .optional()
+    .describe("New title"),
+  // Content is Markdown — allow whitespace control chars (tabs, newlines).
+  content: z
+    .string()
+    .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+    .optional()
+    .describe("New content (Markdown)"),
+});
+
+const updateDocumentOutput = z.object({
+  success: z.boolean(),
+  document: z.object({
+    id: z.string(),
+    title: z.string(),
+    slugId: z.string().optional(),
+    url: z.string(),
+    updatedAt: z.string().optional(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type UpdateDocumentInput = z.infer<typeof updateDocumentInput>;
+type UpdateDocumentOutput = z.infer<typeof updateDocumentOutput>;
+
+interface DocumentUpdateResponse {
+  documentUpdate: {
+    success: boolean;
+    document: {
+      id: string;
+      title: string;
+      slugId?: string | null;
+      url: string;
+      updatedAt?: string | null;
+    } | null;
+  };
+}
+
+export const updateDocument: ToolDescriptor<UpdateDocumentInput, UpdateDocumentOutput> = {
+  id: "linear.updateDocument",
+  name: "Update Linear Document",
+  description: "Update an existing document in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: updateDocumentInput,
+  output: updateDocumentOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<DocumentUpdateResponse>(apiKey, UPDATE_DOCUMENT_MUTATION, {
+      id: args.id,
+      title: args.title,
+      content: args.content,
+    });
+
+    if (!response.documentUpdate.success || !response.documentUpdate.document) {
+      throw new Error(`Failed to update document: ${args.id}`);
+    }
+
+    const baseData = {
+      success: response.documentUpdate.success,
+      document: {
+        id: response.documentUpdate.document.id,
+        title: response.documentUpdate.document.title,
+        slugId: response.documentUpdate.document.slugId || undefined,
+        url: response.documentUpdate.document.url,
+        updatedAt: response.documentUpdate.document.updatedAt || undefined,
+      },
+    };
+
+    return updateDocumentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_issue_relations
+// ════════════════════════════════════════════════════════════════════════════
+
+const LIST_ISSUE_RELATIONS_QUERY = `
+  query IssueRelations($issueId: String!) {
+    issue(id: $issueId) {
+      relations {
+        nodes {
+          id
+          type
+          relatedIssue {
+            id
+            identifier
+            title
+          }
+        }
+      }
+    }
+  }
+`;
+
+const listIssueRelationsInput = z.object({
+  issueId: safeStrictId('Issue identifier (e.g., "ISSUE-123" or UUID)'),
+});
+
+const listIssueRelationsOutput = z.object({
+  relations: z.array(
+    z.object({
+      id: z.string(),
+      type: z.string(),
+      relatedIssue: z.object({
+        id: z.string(),
+        identifier: z.string(),
+        title: z.string(),
+      }),
+    }),
+  ),
+  estimatedTokens: z.number(),
+});
+
+type ListIssueRelationsInput = z.infer<typeof listIssueRelationsInput>;
+type ListIssueRelationsOutput = z.infer<typeof listIssueRelationsOutput>;
+
+interface IssueRelationsResponse {
+  issue: {
+    relations: {
+      nodes: Array<{
+        id: string;
+        type: string;
+        relatedIssue: {
+          id: string;
+          identifier: string;
+          title: string;
+        };
+      }>;
+    };
+  };
+}
+
+export const listIssueRelations: ToolDescriptor<
+  ListIssueRelationsInput,
+  ListIssueRelationsOutput
+> = {
+  id: "linear.list_issue_relations",
+  name: "List Linear Issue Relations",
+  description: "List all relations for an issue in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: listIssueRelationsInput,
+  output: listIssueRelationsOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<IssueRelationsResponse>(
+      apiKey,
+      LIST_ISSUE_RELATIONS_QUERY,
+      { issueId: args.issueId },
+    );
+
+    if (!response.issue?.relations?.nodes) {
+      throw new Error("Failed to list issue relations: Invalid response format");
+    }
+
+    const baseData = {
+      relations: response.issue.relations.nodes.map((relation) => ({
+        id: relation.id,
+        type: relation.type,
+        relatedIssue: {
+          id: relation.relatedIssue.id,
+          identifier: relation.relatedIssue.identifier,
+          title: relation.relatedIssue.title,
+        },
+      })),
+    };
+
+    return listIssueRelationsOutput.parse({
+      ...baseData,
+      estimatedTokens: estimateTokens(baseData),
+    });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_issue_relation  (raw issueId/relatedIssueId — NO resolver, per source)
+// ════════════════════════════════════════════════════════════════════════════
+
+const CREATE_ISSUE_RELATION_MUTATION = `
+  mutation IssueRelationCreate($input: IssueRelationCreateInput!) {
+    issueRelationCreate(input: $input) {
+      success
+      issueRelation {
+        id
+        type
+        issue { id }
+        relatedIssue { id }
+      }
+    }
+  }
+`;
+
+const createIssueRelationInput = z.object({
+  issueId: safeStrictId('Issue identifier (e.g., "ISSUE-123" or UUID)'),
+  relatedIssueId: safeStrictId("Related issue identifier"),
+  type: z
+    .enum(["blocks", "blocked_by", "duplicate", "related"])
+    .describe("Relation type: blocks, blocked_by, duplicate, or related"),
+});
+
+const createIssueRelationOutput = z.object({
+  success: z.boolean(),
+  relation: z.object({
+    id: z.string(),
+    type: z.string(),
+    issueId: z.string(),
+    relatedIssueId: z.string(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type CreateIssueRelationInput = z.infer<typeof createIssueRelationInput>;
+type CreateIssueRelationOutput = z.infer<typeof createIssueRelationOutput>;
+
+interface IssueRelationCreateResponse {
+  issueRelationCreate: {
+    success: boolean;
+    issueRelation?: {
+      id: string;
+      type: string;
+      issue: { id: string };
+      relatedIssue: { id: string };
+    };
+  };
+}
+
+export const createIssueRelation: ToolDescriptor<
+  CreateIssueRelationInput,
+  CreateIssueRelationOutput
+> = {
+  id: "linear.create_issue_relation",
+  name: "Create Linear Issue Relation",
+  description: "Create a relation between two issues in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: createIssueRelationInput,
+  output: createIssueRelationOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    // Raw IDs passed straight through (matches marketplace: { input: validated } with no resolver).
+    const response = await linearGraphQL<IssueRelationCreateResponse>(
+      apiKey,
+      CREATE_ISSUE_RELATION_MUTATION,
+      { input: { issueId: args.issueId, relatedIssueId: args.relatedIssueId, type: args.type } },
+    );
+
+    if (!response.issueRelationCreate.success) {
+      throw new Error("Failed to create issue relation");
+    }
+
+    if (!response.issueRelationCreate.issueRelation) {
+      throw new Error("Failed to create issue relation: No relation returned");
+    }
+
+    const baseData = {
+      success: response.issueRelationCreate.success,
+      relation: {
+        id: response.issueRelationCreate.issueRelation.id,
+        type: response.issueRelationCreate.issueRelation.type,
+        issueId: response.issueRelationCreate.issueRelation.issue.id,
+        relatedIssueId: response.issueRelationCreate.issueRelation.relatedIssue.id,
+      },
+    };
+
+    return createIssueRelationOutput.parse({
+      ...baseData,
+      estimatedTokens: estimateTokens(baseData),
+    });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.delete_issue_relation
+// ════════════════════════════════════════════════════════════════════════════
+
+const DELETE_ISSUE_RELATION_MUTATION = `
+  mutation IssueRelationDelete($id: String!) {
+    issueRelationDelete(id: $id) {
+      success
+    }
+  }
+`;
+
+const deleteIssueRelationInput = z.object({
+  relationId: safeStrictId("Relation UUID to delete"),
+});
+
+const deleteIssueRelationOutput = z.object({
+  success: z.boolean(),
+  estimatedTokens: z.number(),
+});
+
+type DeleteIssueRelationInput = z.infer<typeof deleteIssueRelationInput>;
+type DeleteIssueRelationOutput = z.infer<typeof deleteIssueRelationOutput>;
+
+interface IssueRelationDeleteResponse {
+  issueRelationDelete: {
+    success: boolean;
+  };
+}
+
+export const deleteIssueRelation: ToolDescriptor<
+  DeleteIssueRelationInput,
+  DeleteIssueRelationOutput
+> = {
+  id: "linear.delete_issue_relation",
+  name: "Delete Linear Issue Relation",
+  description: "Delete a relation between issues in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: deleteIssueRelationInput,
+  output: deleteIssueRelationOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<IssueRelationDeleteResponse>(
+      apiKey,
+      DELETE_ISSUE_RELATION_MUTATION,
+      { id: args.relationId },
+    );
+
+    if (!response.issueRelationDelete.success) {
+      throw new Error("Failed to delete issue relation");
+    }
+
+    const baseData = { success: true };
+
+    return deleteIssueRelationOutput.parse({
+      ...baseData,
+      estimatedTokens: estimateTokens(baseData),
+    });
+  },
+};
