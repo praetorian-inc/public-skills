@@ -1,0 +1,39 @@
+{
+  "manifestVersion": 1,
+  "service": "echo",
+  "tools": [
+    {
+      "id": "echo.echo",
+      "name": "echo",
+      "description": "Echo the provided text back unchanged.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "entry": "wrapper.ts#echo",
+      "schemaHash": "6786cc243ed03e0be4706e56dedcae6aff179f171666e28e86bef3d1a0599983"
+    }
+  ]
+}

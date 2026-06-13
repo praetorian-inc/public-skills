@@ -57,8 +57,17 @@ describe("buildIndex — skills-only fixture catalog", () => {
   });
 
   it("tolerates a catalog with no tools/ directory", () => {
-    const entries = buildIndex(fixtureRoot);
-    expect(entries.every((e) => e.kind === "skill")).toBe(true);
+    // The shared fixture now carries a tool (the echo sample), so build a
+    // throwaway skills-only catalog to exercise the missing-tools/ path.
+    const cat = makeCatalog();
+    try {
+      cat.addSkill("only-skill", "only-skill", "A skill with no tools alongside it.");
+      const entries = buildIndex(cat.root);
+      expect(entries).toHaveLength(1);
+      expect(entries.every((e) => e.kind === "skill")).toBe(true);
+    } finally {
+      cat.cleanup();
+    }
   });
 });
 
