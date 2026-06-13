@@ -5942,3 +5942,546 @@ export const deleteFavorite: ToolDescriptor<DeleteFavoriteInput, DeleteFavoriteO
     return deleteFavoriteOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
   },
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 7 — Initiatives family (create/get/list/update/delete/link_project).
+// Shallow CRUD; NO resolvers (link_project_to_initiative passes raw initiativeId/
+// projectId verbatim, matching the marketplace source). Appended below Batch 6;
+// no existing export is modified.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_initiative
+// ════════════════════════════════════════════════════════════════════════════
+
+const CREATE_INITIATIVE_MUTATION = `
+  mutation InitiativeCreate($input: InitiativeCreateInput!) {
+    initiativeCreate(input: $input) {
+      success
+      initiative {
+        id
+        name
+      }
+    }
+  }
+`;
+
+const createInitiativeInput = z.object({
+  // Name is user content - required min(1); only block control chars (marketplace
+  // used the strict validateNoControlChars, NOT the whitespace-allowing variant).
+  // safeText returns ZodEffects (no .min()), so chain refines explicitly here.
+  name: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .describe("Initiative name"),
+  // Description is user content - allow whitespace, block dangerous control chars.
+  description: z
+    .string()
+    .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+    .optional()
+    .describe("Initiative description (Markdown)"),
+  // Date field - block control chars.
+  targetDate: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .optional()
+    .describe("Target date (ISO format)"),
+});
+
+const createInitiativeOutput = z.object({
+  success: z.boolean(),
+  initiative: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type CreateInitiativeInput = z.infer<typeof createInitiativeInput>;
+type CreateInitiativeOutput = z.infer<typeof createInitiativeOutput>;
+
+interface InitiativeCreateResponse {
+  initiativeCreate: {
+    success: boolean;
+    initiative: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export const createInitiative: ToolDescriptor<CreateInitiativeInput, CreateInitiativeOutput> = {
+  id: "linear.create_initiative",
+  name: "Create Linear Initiative",
+  description: "Create a new initiative in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: createInitiativeInput,
+  output: createInitiativeOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<InitiativeCreateResponse>(
+      apiKey,
+      CREATE_INITIATIVE_MUTATION,
+      { input: args },
+    );
+
+    if (!response.initiativeCreate.success) {
+      throw new Error("Failed to create initiative");
+    }
+
+    const baseData = {
+      success: true,
+      initiative: {
+        id: response.initiativeCreate.initiative.id,
+        name: response.initiativeCreate.initiative.name,
+      },
+    };
+
+    return createInitiativeOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.get_initiative
+// ════════════════════════════════════════════════════════════════════════════
+
+const GET_INITIATIVE_QUERY = `
+  query Initiative($id: String!) {
+    initiative(id: $id) {
+      id
+      name
+      description
+      targetDate
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const getInitiativeInput = z.object({
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Initiative ID or name"),
+});
+
+const getInitiativeOutput = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  targetDate: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  estimatedTokens: z.number(),
+});
+
+type GetInitiativeInput = z.infer<typeof getInitiativeInput>;
+type GetInitiativeOutput = z.infer<typeof getInitiativeOutput>;
+
+interface InitiativeResponse {
+  initiative: {
+    id: string;
+    name: string;
+    description?: string | null;
+    targetDate?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
+}
+
+export const getInitiative: ToolDescriptor<GetInitiativeInput, GetInitiativeOutput> = {
+  id: "linear.get_initiative",
+  name: "Get Linear Initiative",
+  description: "Get detailed information about a specific Linear initiative",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: getInitiativeInput,
+  output: getInitiativeOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<InitiativeResponse>(apiKey, GET_INITIATIVE_QUERY, {
+      id: args.id,
+    });
+
+    if (!response.initiative) {
+      throw new Error(`Initiative not found: ${args.id}`);
+    }
+
+    const baseData = {
+      id: response.initiative.id,
+      name: response.initiative.name,
+      description: response.initiative.description?.substring(0, 500),
+      targetDate: response.initiative.targetDate || undefined,
+      createdAt: response.initiative.createdAt || undefined,
+      updatedAt: response.initiative.updatedAt || undefined,
+    };
+
+    return getInitiativeOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_initiatives
+// ════════════════════════════════════════════════════════════════════════════
+
+const LIST_INITIATIVES_QUERY = `
+  query Initiatives($first: Int) {
+    initiatives(first: $first) {
+      nodes {
+        id
+        name
+        description
+        targetDate
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+const listInitiativesInput = z.object({
+  filter: safeFilter("Filter by name or description (fuzzy search)"),
+  limit: z
+    .number()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("Maximum number of initiatives to return (default: 50, max: 100)"),
+});
+
+const listInitiativesOutput = z.object({
+  initiatives: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().optional(),
+      targetDate: z.string().optional(),
+    }),
+  ),
+  estimatedTokens: z.number(),
+});
+
+type ListInitiativesInput = z.infer<typeof listInitiativesInput>;
+type ListInitiativesOutput = z.infer<typeof listInitiativesOutput>;
+
+interface InitiativesResponse {
+  initiatives: {
+    nodes: Array<{
+      id: string;
+      name: string;
+      description?: string | null;
+      targetDate?: string | null;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string | null;
+    };
+  };
+}
+
+export const listInitiatives: ToolDescriptor<ListInitiativesInput, ListInitiativesOutput> = {
+  id: "linear.list_initiatives",
+  name: "List Linear Initiatives",
+  description: "List all initiatives in Linear with optional filtering",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: listInitiativesInput,
+  output: listInitiativesOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const variables: Record<string, unknown> = {};
+    if (args.limit) {
+      variables.first = args.limit;
+    }
+
+    const response = await linearGraphQL<InitiativesResponse>(
+      apiKey,
+      LIST_INITIATIVES_QUERY,
+      variables,
+    );
+
+    if (!response.initiatives || !Array.isArray(response.initiatives.nodes)) {
+      throw new Error("Failed to list initiatives: Invalid response format");
+    }
+
+    const baseData = {
+      initiatives: response.initiatives.nodes.map((init) => ({
+        id: init.id,
+        name: init.name,
+        description: init.description?.substring(0, 200),
+        targetDate: init.targetDate || undefined,
+      })),
+    };
+
+    return listInitiativesOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.update_initiative
+// ════════════════════════════════════════════════════════════════════════════
+
+const UPDATE_INITIATIVE_MUTATION = `
+  mutation InitiativeUpdate($id: String!, $input: InitiativeUpdateInput!) {
+    initiativeUpdate(id: $id, input: $input) {
+      success
+      initiative {
+        id
+        name
+      }
+    }
+  }
+`;
+
+const updateInitiativeInput = z.object({
+  // ID is identifier - strict validation.
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Initiative ID or name"),
+  // Name is user content - only block control chars.
+  name: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .optional()
+    .describe("New initiative name"),
+  // Description is user content - allow whitespace, block dangerous control chars.
+  description: z
+    .string()
+    .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+    .optional()
+    .describe("New initiative description (Markdown)"),
+  // Date field - block control chars.
+  targetDate: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .optional()
+    .describe("New target date (ISO format)"),
+});
+
+const updateInitiativeOutput = z.object({
+  success: z.boolean(),
+  initiative: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type UpdateInitiativeInput = z.infer<typeof updateInitiativeInput>;
+type UpdateInitiativeOutput = z.infer<typeof updateInitiativeOutput>;
+
+interface InitiativeUpdateResponse {
+  initiativeUpdate: {
+    success: boolean;
+    initiative: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export const updateInitiative: ToolDescriptor<UpdateInitiativeInput, UpdateInitiativeOutput> = {
+  id: "linear.update_initiative",
+  name: "Update Linear Initiative",
+  description: "Update an existing initiative in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: updateInitiativeInput,
+  output: updateInitiativeOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+    const { id, ...updateInput } = args;
+
+    const response = await linearGraphQL<InitiativeUpdateResponse>(
+      apiKey,
+      UPDATE_INITIATIVE_MUTATION,
+      { id, input: updateInput },
+    );
+
+    if (!response.initiativeUpdate.success) {
+      throw new Error("Failed to update initiative");
+    }
+
+    const baseData = {
+      success: true,
+      initiative: {
+        id: response.initiativeUpdate.initiative.id,
+        name: response.initiativeUpdate.initiative.name,
+      },
+    };
+
+    return updateInitiativeOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.delete_initiative
+// ════════════════════════════════════════════════════════════════════════════
+
+const DELETE_INITIATIVE_MUTATION = `
+  mutation InitiativeDelete($id: String!) {
+    initiativeDelete(id: $id) {
+      success
+    }
+  }
+`;
+
+const deleteInitiativeInput = z.object({
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Initiative ID or name"),
+});
+
+const deleteInitiativeOutput = z.object({
+  success: z.boolean(),
+  estimatedTokens: z.number(),
+});
+
+type DeleteInitiativeInput = z.infer<typeof deleteInitiativeInput>;
+type DeleteInitiativeOutput = z.infer<typeof deleteInitiativeOutput>;
+
+interface InitiativeDeleteResponse {
+  initiativeDelete: {
+    success: boolean;
+  };
+}
+
+export const deleteInitiative: ToolDescriptor<DeleteInitiativeInput, DeleteInitiativeOutput> = {
+  id: "linear.delete_initiative",
+  name: "Delete Linear Initiative",
+  description: "Delete an initiative in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: deleteInitiativeInput,
+  output: deleteInitiativeOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<InitiativeDeleteResponse>(
+      apiKey,
+      DELETE_INITIATIVE_MUTATION,
+      { id: args.id },
+    );
+
+    if (!response.initiativeDelete.success) {
+      throw new Error("Failed to delete initiative");
+    }
+
+    const baseData = {
+      success: true,
+    };
+
+    return deleteInitiativeOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.link_project_to_initiative
+// ════════════════════════════════════════════════════════════════════════════
+
+const LINK_PROJECT_TO_INITIATIVE_MUTATION = `
+  mutation InitiativeToProjectCreate($initiativeId: String!, $projectId: String!) {
+    initiativeToProjectCreate(initiativeId: $initiativeId, projectId: $projectId) {
+      success
+      initiativeToProject {
+        id
+      }
+    }
+  }
+`;
+
+const linkProjectToInitiativeInput = z.object({
+  initiativeId: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Initiative ID or name"),
+  projectId: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Project ID or name"),
+});
+
+const linkProjectToInitiativeOutput = z.object({
+  success: z.boolean(),
+  initiativeToProjectId: z.string(),
+  estimatedTokens: z.number(),
+});
+
+type LinkProjectToInitiativeInput = z.infer<typeof linkProjectToInitiativeInput>;
+type LinkProjectToInitiativeOutput = z.infer<typeof linkProjectToInitiativeOutput>;
+
+interface InitiativeToProjectCreateResponse {
+  initiativeToProjectCreate: {
+    success: boolean;
+    initiativeToProject: {
+      id: string;
+    } | null;
+  };
+}
+
+export const linkProjectToInitiative: ToolDescriptor<
+  LinkProjectToInitiativeInput,
+  LinkProjectToInitiativeOutput
+> = {
+  id: "linear.link_project_to_initiative",
+  name: "Link Project to Linear Initiative",
+  description: "Link a project to an initiative in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: linkProjectToInitiativeInput,
+  output: linkProjectToInitiativeOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<InitiativeToProjectCreateResponse>(
+      apiKey,
+      LINK_PROJECT_TO_INITIATIVE_MUTATION,
+      {
+        initiativeId: args.initiativeId,
+        projectId: args.projectId,
+      },
+    );
+
+    if (!response.initiativeToProjectCreate.success) {
+      throw new Error("Failed to link project to initiative");
+    }
+
+    if (!response.initiativeToProjectCreate.initiativeToProject) {
+      throw new Error("Failed to link project to initiative: no link created");
+    }
+
+    const baseData = {
+      success: true,
+      initiativeToProjectId: response.initiativeToProjectCreate.initiativeToProject.id,
+    };
+
+    return linkProjectToInitiativeOutput.parse({
+      ...baseData,
+      estimatedTokens: estimateTokens(baseData),
+    });
+  },
+};

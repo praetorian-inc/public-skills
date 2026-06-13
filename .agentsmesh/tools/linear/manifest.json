@@ -477,6 +477,76 @@
       "schemaHash": "5a8cb32c285e2d9b6d385c647a530acf9dbae83f80075629b9d031c9964e273a"
     },
     {
+      "id": "linear.create_initiative",
+      "name": "Create Linear Initiative",
+      "description": "Create a new initiative in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initiative name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Initiative description (Markdown)"
+          },
+          "targetDate": {
+            "type": "string",
+            "description": "Target date (ISO format)"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "initiative": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "initiative",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createInitiative",
+      "schemaHash": "fcb7b8a9738a69b54ba47e0dcff495dd188e9d6aceee562c0fc9c5ce9c27c9f2"
+    },
+    {
       "id": "linear.create_issue",
       "name": "Create Linear Issue",
       "description": "Create a new issue in Linear",
@@ -1170,6 +1240,51 @@
       "schemaHash": "153f2adf7a4cfe17a57df36f0bb5cd4039ab699ccf6c1a6cca81e0c1cbf1a4ec"
     },
     {
+      "id": "linear.delete_initiative",
+      "name": "Delete Linear Initiative",
+      "description": "Delete an initiative in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initiative ID or name"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteInitiative",
+      "schemaHash": "2cb5ce41f8f7a0eed5c7ef0e16a626996bc98c93e6c541bd786a2959b74f86c7"
+    },
+    {
       "id": "linear.delete_label",
       "name": "Delete Linear Label",
       "description": "Delete a label from Linear",
@@ -1792,6 +1907,67 @@
       },
       "entry": "wrapper.ts#getCycle",
       "schemaHash": "06815e495c5071b2b1cd37950bec16814d05b139685f2ef65bd48f9b60de7cc6"
+    },
+    {
+      "id": "linear.get_initiative",
+      "name": "Get Linear Initiative",
+      "description": "Get detailed information about a specific Linear initiative",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initiative ID or name"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "targetDate": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getInitiative",
+      "schemaHash": "27d5f3968e2a9ca3d8cfe0252b6d84255dcf85edabb9f36bcc3ed77232c5ae2c"
     },
     {
       "id": "linear.get_issue",
@@ -2468,6 +2644,61 @@
       "schemaHash": "dfaf6ace80199b8841b1ba27f1e49a458224d3cde8bae594f3bf10f2139cf27c"
     },
     {
+      "id": "linear.link_project_to_initiative",
+      "name": "Link Project to Linear Initiative",
+      "description": "Link a project to an initiative in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "initiativeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initiative ID or name"
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Project ID or name"
+          }
+        },
+        "required": [
+          "initiativeId",
+          "projectId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "initiativeToProjectId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "initiativeToProjectId",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#linkProjectToInitiative",
+      "schemaHash": "2b4b475314cf27b26d86ea7c83f7bd65f42c4f116a02db03e6e83ddf12ec9703"
+    },
+    {
       "id": "linear.list_attachments",
       "name": "List Linear Attachments",
       "description": "List attachments from Linear",
@@ -2782,6 +3013,75 @@
       },
       "entry": "wrapper.ts#listCycles",
       "schemaHash": "dfee6b7b589523768c1ea59eb883bc383eb3f5bcbdb6282804bc28a939b8e12e"
+    },
+    {
+      "id": "linear.list_initiatives",
+      "name": "List Linear Initiatives",
+      "description": "List all initiatives in Linear with optional filtering",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Filter by name or description (fuzzy search)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Maximum number of initiatives to return (default: 50, max: 100)"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "initiatives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "targetDate": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "initiatives",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listInitiatives",
+      "schemaHash": "9172b1b352d021fc774b4293b6f36413d6352176ab74ad822000c8b1541d3f29"
     },
     {
       "id": "linear.list_issues",
@@ -4042,6 +4342,80 @@
       },
       "entry": "wrapper.ts#updateCycle",
       "schemaHash": "2a30e1990c878f6cc2b309ee2a300a4dea07f938d8acfb6dc67fdb98c0469056"
+    },
+    {
+      "id": "linear.update_initiative",
+      "name": "Update Linear Initiative",
+      "description": "Update an existing initiative in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initiative ID or name"
+          },
+          "name": {
+            "type": "string",
+            "description": "New initiative name"
+          },
+          "description": {
+            "type": "string",
+            "description": "New initiative description (Markdown)"
+          },
+          "targetDate": {
+            "type": "string",
+            "description": "New target date (ISO format)"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "initiative": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "initiative",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateInitiative",
+      "schemaHash": "2544ba22c24aba73fb893dcc26f89f90cba25a422e89a5741327d138ffc31482"
     },
     {
       "id": "linear.update_issue",
