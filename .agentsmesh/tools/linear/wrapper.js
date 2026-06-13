@@ -3713,3 +3713,724 @@ export const updateWorkflowState = {
         });
     },
 };
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 6 — Attachments + Reactions + Subscribers + Favorites families.
+// Ported verbatim from the marketplace wrappers (list-attachments, create/update/
+// delete-attachment, create/delete-reaction, subscribe/unsubscribe-from-issue,
+// create/delete-favorite). All raw-id passthrough (NO resolver calls), shallow
+// mutation/delete. Reuses shared helpers: linearGraphQL, estimateTokens,
+// noControlChars/noPathTraversal/noCommandInjection. The marketplace
+// validateNo* validators map 1:1 onto the inlined no* predicates (O8 contract).
+// `.default()` is forbidden on input fields (DEFAULT_LIMIT applied in handler).
+// ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_attachments
+// ════════════════════════════════════════════════════════════════════════════
+const LIST_ATTACHMENTS_QUERY = `
+  query Attachments($first: Int, $filter: AttachmentFilter) {
+    attachments(first: $first, filter: $filter) {
+      nodes {
+        id
+        title
+        subtitle
+        url
+        metadata
+        source
+        sourceType
+        issue { id }
+        creator { id }
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+const listAttachmentsInput = z.object({
+    filter: z
+        .object({
+        issueId: z
+            .string()
+            .refine(noControlChars, "Control characters not allowed")
+            .refine(noPathTraversal, "Path traversal not allowed")
+            .refine(noCommandInjection, "Invalid characters detected")
+            .optional()
+            .describe("Filter by issue ID"),
+    })
+        .optional(),
+    limit: z.number().min(1).max(250).optional().describe("Number of results"),
+});
+const LIST_ATTACHMENTS_DEFAULT_LIMIT = 100;
+const listAttachmentsOutput = z.object({
+    attachments: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        subtitle: z.string().optional(),
+        url: z.string(),
+        source: z.union([z.string(), z.object({ type: z.string() })]),
+        sourceType: z.string().optional(),
+        metadata: z.record(z.unknown()).optional(),
+        issueId: z.string().optional(),
+        creatorId: z.string().optional(),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+    })),
+    totalAttachments: z.number(),
+    estimatedTokens: z.number(),
+});
+export const listAttachments = {
+    id: "linear.list_attachments",
+    name: "List Linear Attachments",
+    description: "List attachments from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: listAttachmentsInput,
+    output: listAttachmentsOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const filter = {};
+        if (args.filter?.issueId) {
+            filter.issue = { id: { eq: args.filter.issueId } };
+        }
+        const response = await linearGraphQL(apiKey, LIST_ATTACHMENTS_QUERY, {
+            first: args.limit ?? LIST_ATTACHMENTS_DEFAULT_LIMIT,
+            filter: Object.keys(filter).length > 0 ? filter : undefined,
+        });
+        const attachments = response.attachments?.nodes || [];
+        const baseData = {
+            attachments: attachments.map((att) => ({
+                id: att.id,
+                title: att.title,
+                subtitle: att.subtitle || undefined,
+                url: att.url,
+                source: att.source,
+                sourceType: att.sourceType || undefined,
+                metadata: att.metadata || undefined,
+                issueId: att.issue?.id,
+                creatorId: att.creator?.id,
+                createdAt: att.createdAt || undefined,
+                updatedAt: att.updatedAt || undefined,
+            })),
+            totalAttachments: attachments.length,
+        };
+        return listAttachmentsOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_attachment
+// ════════════════════════════════════════════════════════════════════════════
+const CREATE_ATTACHMENT_MUTATION = `
+  mutation AttachmentCreate($input: AttachmentCreateInput!) {
+    attachmentCreate(input: $input) {
+      success
+      attachment {
+        id
+        title
+        url
+      }
+    }
+  }
+`;
+const createAttachmentInput = z.object({
+    issueId: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Issue ID to attach to"),
+    title: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .describe("Attachment title"),
+    subtitle: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Attachment subtitle"),
+    url: z
+        .string()
+        .url("Must be valid URL")
+        .regex(/^https?:\/\//, "Must be http or https URL")
+        .describe("URL to the attachment"),
+    metadata: z.record(z.unknown()).optional().describe("Additional metadata"),
+});
+const createAttachmentOutput = z.object({
+    success: z.boolean(),
+    attachment: z.object({
+        id: z.string(),
+        title: z.string(),
+        url: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const createAttachment = {
+    id: "linear.create_attachment",
+    name: "Create Linear Attachment",
+    description: "Create a new attachment in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createAttachmentInput,
+    output: createAttachmentOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {
+            issueId: args.issueId,
+            title: args.title,
+            url: args.url,
+        };
+        if (args.subtitle)
+            mutationInput.subtitle = args.subtitle;
+        if (args.metadata)
+            mutationInput.metadata = args.metadata;
+        const response = await linearGraphQL(apiKey, CREATE_ATTACHMENT_MUTATION, { input: mutationInput });
+        if (!response.attachmentCreate?.success || !response.attachmentCreate?.attachment) {
+            throw new Error("Failed to create attachment");
+        }
+        const baseData = {
+            success: response.attachmentCreate.success,
+            attachment: {
+                id: response.attachmentCreate.attachment.id,
+                title: response.attachmentCreate.attachment.title,
+                url: response.attachmentCreate.attachment.url,
+            },
+        };
+        return createAttachmentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.update_attachment
+// ════════════════════════════════════════════════════════════════════════════
+const UPDATE_ATTACHMENT_MUTATION = `
+  mutation AttachmentUpdate($id: String!, $input: AttachmentUpdateInput!) {
+    attachmentUpdate(id: $id, input: $input) {
+      success
+      attachment {
+        id
+        title
+        url
+      }
+    }
+  }
+`;
+const updateAttachmentInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Attachment ID"),
+    title: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Updated attachment title"),
+    subtitle: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Updated attachment subtitle"),
+    metadata: z.record(z.unknown()).optional().describe("Updated metadata"),
+});
+const updateAttachmentOutput = z.object({
+    success: z.boolean(),
+    attachment: z.object({
+        id: z.string(),
+        title: z.string(),
+        url: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const updateAttachment = {
+    id: "linear.update_attachment",
+    name: "Update Linear Attachment",
+    description: "Update an attachment in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: updateAttachmentInput,
+    output: updateAttachmentOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {};
+        if (args.title !== undefined)
+            mutationInput.title = args.title;
+        if (args.subtitle !== undefined)
+            mutationInput.subtitle = args.subtitle;
+        if (args.metadata !== undefined)
+            mutationInput.metadata = args.metadata;
+        const response = await linearGraphQL(apiKey, UPDATE_ATTACHMENT_MUTATION, { id: args.id, input: mutationInput });
+        if (!response.attachmentUpdate?.success || !response.attachmentUpdate?.attachment) {
+            throw new Error("Failed to update attachment");
+        }
+        const baseData = {
+            success: response.attachmentUpdate.success,
+            attachment: {
+                id: response.attachmentUpdate.attachment.id,
+                title: response.attachmentUpdate.attachment.title,
+                url: response.attachmentUpdate.attachment.url,
+            },
+        };
+        return updateAttachmentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.delete_attachment
+// ════════════════════════════════════════════════════════════════════════════
+const DELETE_ATTACHMENT_MUTATION = `
+  mutation AttachmentDelete($id: String!) {
+    attachmentDelete(id: $id) {
+      success
+    }
+  }
+`;
+const deleteAttachmentInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Attachment ID to delete"),
+});
+const deleteAttachmentOutput = z.object({
+    success: z.boolean(),
+    estimatedTokens: z.number(),
+});
+export const deleteAttachment = {
+    id: "linear.delete_attachment",
+    name: "Delete Linear Attachment",
+    description: "Delete an attachment from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: deleteAttachmentInput,
+    output: deleteAttachmentOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, DELETE_ATTACHMENT_MUTATION, { id: args.id });
+        const baseData = {
+            success: response.attachmentDelete.success,
+        };
+        return deleteAttachmentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_reaction
+// ════════════════════════════════════════════════════════════════════════════
+const CREATE_REACTION_MUTATION = `
+  mutation ReactionCreate($input: ReactionCreateInput!) {
+    reactionCreate(input: $input) {
+      success
+      reaction {
+        id
+        emoji
+        user {
+          id
+          name
+        }
+        comment {
+          id
+        }
+      }
+    }
+  }
+`;
+const createReactionInput = z.object({
+    commentId: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Comment ID to add reaction to"),
+    emoji: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .describe("Emoji character(s) for reaction"),
+});
+const createReactionOutput = z.object({
+    success: z.boolean(),
+    reaction: z.object({
+        id: z.string(),
+        emoji: z.string(),
+        user: z.object({
+            id: z.string(),
+            name: z.string(),
+        }),
+        commentId: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const createReaction = {
+    id: "linear.create_reaction",
+    name: "Create Linear Reaction",
+    description: "Create an emoji reaction on a comment in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createReactionInput,
+    output: createReactionOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, CREATE_REACTION_MUTATION, {
+            input: {
+                commentId: args.commentId,
+                emoji: args.emoji,
+            },
+        });
+        if (!response.reactionCreate?.success || !response.reactionCreate?.reaction) {
+            throw new Error("Failed to create reaction");
+        }
+        const baseData = {
+            success: response.reactionCreate.success,
+            reaction: {
+                id: response.reactionCreate.reaction.id,
+                emoji: response.reactionCreate.reaction.emoji,
+                user: {
+                    id: response.reactionCreate.reaction.user.id,
+                    name: response.reactionCreate.reaction.user.name,
+                },
+                commentId: response.reactionCreate.reaction.comment.id,
+            },
+        };
+        return createReactionOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.delete_reaction
+// ════════════════════════════════════════════════════════════════════════════
+const DELETE_REACTION_MUTATION = `
+  mutation ReactionDelete($id: String!) {
+    reactionDelete(id: $id) {
+      success
+    }
+  }
+`;
+const deleteReactionInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Reaction ID to delete"),
+});
+const deleteReactionOutput = z.object({
+    success: z.boolean(),
+    estimatedTokens: z.number(),
+});
+export const deleteReaction = {
+    id: "linear.delete_reaction",
+    name: "Delete Linear Reaction",
+    description: "Delete an emoji reaction from a comment in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: deleteReactionInput,
+    output: deleteReactionOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, DELETE_REACTION_MUTATION, {
+            id: args.id,
+        });
+        if (!response.reactionDelete?.success) {
+            throw new Error("Failed to delete reaction");
+        }
+        const baseData = {
+            success: response.reactionDelete.success,
+        };
+        return deleteReactionOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.subscribe_to_issue
+// ════════════════════════════════════════════════════════════════════════════
+const SUBSCRIBE_TO_ISSUE_MUTATION = `
+  mutation IssueSubscribe($issueId: String!, $userId: String) {
+    issueSubscribe(id: $issueId, userId: $userId) {
+      success
+      issue {
+        id
+        identifier
+        subscribers {
+          nodes {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+`;
+const subscribeToIssueInput = z.object({
+    issueId: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Issue ID to subscribe to"),
+    userId: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe("User ID to subscribe (defaults to current user)"),
+});
+const subscribeToIssueOutput = z.object({
+    success: z.boolean(),
+    issue: z.object({
+        id: z.string(),
+        identifier: z.string(),
+        subscribers: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+        })),
+    }),
+    estimatedTokens: z.number(),
+});
+export const subscribeToIssue = {
+    id: "linear.subscribe_to_issue",
+    name: "Subscribe to Linear Issue",
+    description: "Subscribe to issue notifications in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: subscribeToIssueInput,
+    output: subscribeToIssueOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, SUBSCRIBE_TO_ISSUE_MUTATION, { issueId: args.issueId, userId: args.userId });
+        if (!response.issueSubscribe?.success || !response.issueSubscribe?.issue) {
+            throw new Error("Failed to subscribe to issue");
+        }
+        const issue = response.issueSubscribe.issue;
+        const baseData = {
+            success: response.issueSubscribe.success,
+            issue: {
+                id: issue.id,
+                identifier: issue.identifier,
+                subscribers: issue.subscribers.nodes.map((sub) => ({
+                    id: sub.id,
+                    name: sub.name,
+                })),
+            },
+        };
+        return subscribeToIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.unsubscribe_from_issue
+// ════════════════════════════════════════════════════════════════════════════
+const UNSUBSCRIBE_FROM_ISSUE_MUTATION = `
+  mutation IssueUnsubscribe($issueId: String!, $userId: String) {
+    issueUnsubscribe(id: $issueId, userId: $userId) {
+      success
+      issue {
+        id
+        identifier
+      }
+    }
+  }
+`;
+const unsubscribeFromIssueInput = z.object({
+    issueId: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Issue ID to unsubscribe from"),
+    userId: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe("User ID to unsubscribe (defaults to current user)"),
+});
+const unsubscribeFromIssueOutput = z.object({
+    success: z.boolean(),
+    issue: z.object({
+        id: z.string(),
+        identifier: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const unsubscribeFromIssue = {
+    id: "linear.unsubscribe_from_issue",
+    name: "Unsubscribe from Linear Issue",
+    description: "Unsubscribe from issue notifications in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: unsubscribeFromIssueInput,
+    output: unsubscribeFromIssueOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, UNSUBSCRIBE_FROM_ISSUE_MUTATION, { issueId: args.issueId, userId: args.userId });
+        if (!response.issueUnsubscribe?.success || !response.issueUnsubscribe?.issue) {
+            throw new Error("Failed to unsubscribe from issue");
+        }
+        const issue = response.issueUnsubscribe.issue;
+        const baseData = {
+            success: response.issueUnsubscribe.success,
+            issue: {
+                id: issue.id,
+                identifier: issue.identifier,
+            },
+        };
+        return unsubscribeFromIssueOutput.parse({
+            ...baseData,
+            estimatedTokens: estimateTokens(baseData),
+        });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_favorite
+// ════════════════════════════════════════════════════════════════════════════
+const CREATE_FAVORITE_MUTATION = `
+  mutation FavoriteCreate($input: FavoriteCreateInput!) {
+    favoriteCreate(input: $input) {
+      success
+      favorite {
+        id
+        type
+        issue {
+          id
+          identifier
+        }
+        project {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+const createFavoriteInput = z
+    .object({
+    issueId: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe("Issue UUID to favorite"),
+    projectId: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe("Project UUID to favorite"),
+})
+    .refine((data) => (data.issueId || data.projectId) && !(data.issueId && data.projectId), "Must specify exactly one of: issueId or projectId");
+const createFavoriteOutput = z.object({
+    success: z.boolean(),
+    favorite: z.object({
+        id: z.string(),
+        type: z.string(),
+        issue: z
+            .object({
+            id: z.string(),
+            identifier: z.string(),
+        })
+            .optional(),
+        project: z
+            .object({
+            id: z.string(),
+            name: z.string(),
+        })
+            .optional(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const createFavorite = {
+    id: "linear.create_favorite",
+    name: "Create Linear Favorite",
+    description: "Create a favorite (star) in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createFavoriteInput,
+    output: createFavoriteOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {};
+        if (args.issueId)
+            mutationInput.issueId = args.issueId;
+        if (args.projectId)
+            mutationInput.projectId = args.projectId;
+        const response = await linearGraphQL(apiKey, CREATE_FAVORITE_MUTATION, {
+            input: mutationInput,
+        });
+        if (!response.favoriteCreate?.success || !response.favoriteCreate?.favorite) {
+            throw new Error("Failed to create favorite");
+        }
+        const favorite = response.favoriteCreate.favorite;
+        const baseData = {
+            success: response.favoriteCreate.success,
+            favorite: {
+                id: favorite.id,
+                type: favorite.type,
+                ...(favorite.issue && {
+                    issue: {
+                        id: favorite.issue.id,
+                        identifier: favorite.issue.identifier,
+                    },
+                }),
+                ...(favorite.project && {
+                    project: {
+                        id: favorite.project.id,
+                        name: favorite.project.name,
+                    },
+                }),
+            },
+        };
+        return createFavoriteOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.delete_favorite
+// ════════════════════════════════════════════════════════════════════════════
+const DELETE_FAVORITE_MUTATION = `
+  mutation FavoriteDelete($id: String!) {
+    favoriteDelete(id: $id) {
+      success
+    }
+  }
+`;
+const deleteFavoriteInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Favorite UUID to delete"),
+});
+const deleteFavoriteOutput = z.object({
+    success: z.boolean(),
+    estimatedTokens: z.number(),
+});
+export const deleteFavorite = {
+    id: "linear.delete_favorite",
+    name: "Delete Linear Favorite",
+    description: "Delete a favorite (unstar) in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: deleteFavoriteInput,
+    output: deleteFavoriteOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, DELETE_FAVORITE_MUTATION, {
+            id: args.id,
+        });
+        if (!response.favoriteDelete?.success) {
+            throw new Error("Failed to delete favorite");
+        }
+        const baseData = {
+            success: response.favoriteDelete.success,
+        };
+        return deleteFavoriteOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
