@@ -8,7 +8,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Kind } from "../catalog/types.js";
 
-/** The 8 stable error codes P0 must explicitly handle (plan: Error handling B3). */
+/**
+ * The stable runtime error codes the gateway explicitly handles.
+ *
+ * The first 8 are the P0 set (plan: Error handling B3). WS-1 adds the three
+ * `sandbox_*` codes for `run_code` isolate failures; they are distinct so a
+ * model can react differently (shorten work on timeout, reduce in-isolate data
+ * on memory) and so a genuine bug (`sandbox_error`) is not confused with a
+ * resource cap.
+ */
 export type GatewayErrorCode =
   | "unknown_id"
   | "kind_mismatch"
@@ -17,7 +25,10 @@ export type GatewayErrorCode =
   | "missing_secret"
   | "wrapper_load_failed"
   | "manifest_invalid"
-  | "manifest_drift";
+  | "manifest_drift"
+  | "sandbox_timeout"
+  | "sandbox_memory"
+  | "sandbox_error";
 
 /**
  * Startup/config codes — distinct from the 8 runtime codes above.
@@ -96,6 +107,24 @@ export function manifestDrift(toolId: string): GatewayError {
 /** A `gateway.config.yaml` selection that is invalid or unsupported in this phase. */
 export function configInvalid(detail: string): GatewayError {
   return new GatewayError("config_invalid", `invalid config: ${detail}`);
+}
+
+/** `run_code` isolate exceeded its wall-clock timeout. */
+export function sandboxTimeout(timeoutMs: number): GatewayError {
+  return new GatewayError("sandbox_timeout", `sandbox timed out after ${timeoutMs}ms`);
+}
+
+/** `run_code` isolate hit its memory cap (V8 OOM inside the isolate). */
+export function sandboxMemory(memoryLimitMb: number): GatewayError {
+  return new GatewayError("sandbox_memory", `sandbox exceeded its ${memoryLimitMb}MB memory limit`);
+}
+
+/**
+ * `run_code` source threw, failed to compile, or returned a non-marshalable
+ * value. `detail` is the isolate-side error string — never a host stack.
+ */
+export function sandboxError(detail: string): GatewayError {
+  return new GatewayError("sandbox_error", `sandbox error: ${detail}`);
 }
 
 /**
