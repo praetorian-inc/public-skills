@@ -15,7 +15,10 @@ import type { Kind } from "../catalog/types.js";
  * `sandbox_*` codes for `run_code` isolate failures; they are distinct so a
  * model can react differently (shorten work on timeout, reduce in-isolate data
  * on memory) and so a genuine bug (`sandbox_error`) is not confused with a
- * resource cap.
+ * resource cap. WS-2 adds `secret_backend_unavailable` for a secret backend
+ * (e.g. the 1Password `op` CLI) that is absent, unauthenticated, or failing —
+ * distinct from `missing_secret` (a working backend that lacks the key) so an
+ * adopter can tell "backend down" from "key not set."
  */
 export type GatewayErrorCode =
   | "unknown_id"
@@ -23,6 +26,7 @@ export type GatewayErrorCode =
   | "invalid_args"
   | "invalid_output"
   | "missing_secret"
+  | "secret_backend_unavailable"
   | "wrapper_load_failed"
   | "manifest_invalid"
   | "manifest_drift"
@@ -84,6 +88,16 @@ export function invalidOutput(detail: string): GatewayError {
 /** `SecretProvider.resolve` could not find a declared `auth` key. */
 export function missingSecret(key: string): GatewayError {
   return new GatewayError("missing_secret", `missing secret: ${key}`);
+}
+
+/**
+ * The secret backend itself is unavailable — e.g. the 1Password `op` CLI is
+ * absent, unauthenticated, or returned non-zero. Distinct from
+ * {@link missingSecret} (a working backend that lacks the key). `detail` must
+ * never contain a secret value — only a backend-level reason.
+ */
+export function secretBackendUnavailable(detail: string): GatewayError {
+  return new GatewayError("secret_backend_unavailable", `secret backend unavailable: ${detail}`);
 }
 
 /** `await import(entry)` threw, or the named export was not found. */
