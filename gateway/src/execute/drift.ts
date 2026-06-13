@@ -1,0 +1,101 @@
+/**
+ * Startup drift guard (B2).
+ *
+ * For each tool in each service manifest, recompute the input/output schema hash
+ * from the LIVE wrapper's Zod descriptors and compare it to the hash stored in
+ * `manifest.json`. A mismatch means `get_schema` (which reads the static
+ * manifest) would silently disagree with `execute` (which runs the live Zod) —
+ * so we refuse to start with a `manifest_drift` {@link GatewayError}.
+ *
+ * The hash is recomputed with the SAME `schemaHash(...)` the manifest generator
+ * used, imported verbatim from `scripts/generate-manifest.ts`, so dev, CI, and
+ * this boot assertion can never compute it differently.
+ *
+ * This calls the exported `schemaHash` from the generate-manifest script; a CI
+ * check can call {@link assertNoDrift} directly with a freshly built index.
+ */
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { z } from "zod";
+import type { ZodTypeAny } from "zod";
+import type { CatalogEntry } from "../catalog/types.js";
+import type { ToolDescriptor } from "./descriptor.js";
+// Reuse the EXACT hash function the manifest generator wrote with.
+import { schemaHash } from "../catalog/schema-hash.js";
+import { manifestDrift, wrapperLoadFailed } from "../errors/to-tool-error.js";
+
+/**
+ * Assert that no tool's stored manifest hash has drifted from its live wrapper.
+ *
+ * @param index - the built catalog index.
+ * @throws {@link GatewayError} (`manifest_drift`) on any mismatch, or
+ *   (`wrapper_load_failed`) if a wrapper/export referenced by the manifest is
+ *   missing.
+ */
+export async function assertNoDrift(index: CatalogEntry[]): Promise<void> {
+  // Unique manifest paths among tool entries.
+  const manifestPaths = new Set<string>();
+  for (const entry of index) {
+    if (entry.kind === "tool") manifestPaths.add(entry.path);
+  }
+
+  for (const manifestPath of manifestPaths) {
+    const raw = JSON.parse(readFileSync(manifestPath, "utf8")) as RawManifest;
+    const serviceDir = dirname(manifestPath);
+    const wrapperPath = resolveWrapperPath(serviceDir);
+    if (!wrapperPath) {
+      throw wrapperLoadFailed(manifestPath, `no wrapper.ts or wrapper.js in ${serviceDir}`);
+    }
+
+    let mod: Record<string, unknown>;
+    try {
+      mod = (await import(pathToFileURL(wrapperPath).href)) as Record<string, unknown>;
+    } catch (e) {
+      throw wrapperLoadFailed(manifestPath, (e as Error).message);
+    }
+
+    for (const tool of raw.tools ?? []) {
+      const exportName = exportFromEntry(tool.entry);
+      const descriptor = mod[exportName];
+      if (!isToolDescriptor(descriptor)) {
+        throw wrapperLoadFailed(tool.entry, `export "${exportName}" is not a ToolDescriptor`);
+      }
+      const live = schemaHash(
+        descriptor.input as unknown as ZodTypeAny,
+        descriptor.output as unknown as ZodTypeAny,
+      );
+      if (live !== tool.schemaHash) {
+        throw manifestDrift(tool.id);
+      }
+    }
+  }
+}
+
+interface RawManifestTool {
+  id: string;
+  entry: string;
+  schemaHash: string;
+}
+interface RawManifest {
+  tools?: RawManifestTool[];
+}
+
+function resolveWrapperPath(serviceDir: string): string | undefined {
+  const ts = join(serviceDir, "wrapper.ts");
+  if (existsSync(ts)) return ts;
+  const js = join(serviceDir, "wrapper.js");
+  if (existsSync(js)) return js;
+  return undefined;
+}
+
+function exportFromEntry(entry: string): string {
+  const hash = entry.indexOf("#");
+  return hash === -1 ? entry : entry.slice(hash + 1);
+}
+
+function isToolDescriptor(v: unknown): v is ToolDescriptor {
+  if (v === null || typeof v !== "object") return false;
+  const d = v as Record<string, unknown>;
+  return d.input instanceof z.ZodType && d.output instanceof z.ZodType;
+}

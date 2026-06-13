@@ -16,11 +16,15 @@
 import { writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createHash } from "node:crypto";
 import type { ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ToolDescriptor } from "../src/execute/descriptor.js";
 import type { Manifest, ManifestTool } from "../src/catalog/types.js";
+// `schemaHash` is the SINGLE source of truth (src/catalog/schema-hash.ts), shared
+// with the startup drift assertion and CI. Re-export it so existing importers of
+// this script's `schemaHash` keep working.
+import { schemaHash } from "../src/catalog/schema-hash.js";
+export { schemaHash };
 
 /** A manifest tool augmented with the B2 drift-guard `schemaHash`. */
 export interface ManifestToolWithHash extends ManifestTool {
@@ -31,39 +35,6 @@ export interface ManifestToolWithHash extends ManifestTool {
 /** A manifest whose tools carry their drift-guard hash. */
 export interface ManifestWithHashes extends Manifest {
   tools: ManifestToolWithHash[];
-}
-
-/**
- * Compute the stable drift-guard hash for a tool's input/output Zod schemas.
- *
- * Converts each schema to JSON Schema, canonicalizes the combined object with
- * sorted keys, and returns its sha256 hex. Deterministic regardless of object
- * key insertion order, so Group C's startup assertion and CI recompute it
- * identically.
- */
-export function schemaHash(input: ZodTypeAny, output: ZodTypeAny): string {
-  const payload = {
-    inputSchema: zodToJsonSchema(input),
-    outputSchema: zodToJsonSchema(output),
-  };
-  return createHash("sha256").update(canonicalize(payload)).digest("hex");
-}
-
-/** JSON-stringify with recursively sorted object keys (stable across orderings). */
-function canonicalize(value: unknown): string {
-  return JSON.stringify(sortKeys(value));
-}
-
-function sortKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeys);
-  if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      out[key] = sortKeys((value as Record<string, unknown>)[key]);
-    }
-    return out;
-  }
-  return value;
 }
 
 /** Type guard: is `v` a `ToolDescriptor` (has id/name + Zod input/output + handler)? */
