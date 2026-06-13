@@ -1,0 +1,3370 @@
+{
+  "manifestVersion": 1,
+  "service": "featurebase",
+  "tools": [
+    {
+      "id": "featurebase.create_article",
+      "name": "Create Featurebase Article",
+      "description": "Create a new article",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Article title"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Article content (markdown supported)"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Article category"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Optional URL slug"
+          },
+          "publishedAt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Publication date (ISO 8601 format)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional tags for categorization"
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "Collection ID to place this article in (from list-collections)"
+          }
+        },
+        "required": [
+          "title",
+          "content",
+          "category",
+          "publishedAt"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "article": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "category",
+              "publishedAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "article",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createArticle",
+      "schemaHash": "d34fe9455bbb07fa702e9d42c85397168cf0b62f934ad13432230b2ad9df93d7"
+    },
+    {
+      "id": "featurebase.create_changelog",
+      "name": "Create Featurebase Changelog Entry",
+      "description": "Create a new changelog entry",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Changelog title"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Changelog content (markdown supported)"
+          },
+          "publishedAt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Publication date (ISO 8601 format)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional tags"
+          }
+        },
+        "required": [
+          "title",
+          "content",
+          "publishedAt"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "publishedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "entry",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createChangelog",
+      "schemaHash": "0380e33065e5706b26ae5e7204b6ee399905392713b7c5aa2af2b67dc2838d8a"
+    },
+    {
+      "id": "featurebase.create_collection",
+      "name": "Create Featurebase Collection",
+      "description": "Create a new help center collection (optionally nested under a parent collection)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Collection name"
+          },
+          "helpCenterId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Help center ID (use \"8b35wrfkj8m35dg3\" for Praetorian)"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Parent collection ID for nesting (omit for top-level)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Collection description"
+          }
+        },
+        "required": [
+          "name",
+          "helpCenterId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "helpCenterId": {
+                "type": "string"
+              },
+              "articleCount": {
+                "type": "number"
+              },
+              "order": {
+                "type": "number"
+              },
+              "path": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "parentId",
+              "helpCenterId",
+              "articleCount",
+              "order",
+              "path",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "collection",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createCollection",
+      "schemaHash": "274de4b5987fbe1aa8b1eb746464e7f541cb951804f39d52f05ce44b1c150cc1"
+    },
+    {
+      "id": "featurebase.create_comment",
+      "name": "Create Featurebase Comment",
+      "description": "Create a new comment on a post or changelog with support for threaded replies and private comments",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "submissionId": {
+            "type": "string",
+            "description": "Post ID to comment on"
+          },
+          "changelogId": {
+            "type": "string",
+            "description": "Changelog ID to comment on"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000,
+            "description": "Comment content"
+          },
+          "parentCommentId": {
+            "type": "string",
+            "description": "Parent comment ID for threaded replies"
+          },
+          "isPrivate": {
+            "type": "boolean",
+            "description": "Whether the comment is private (admin-only)"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "submissionId": {
+            "type": "string"
+          },
+          "changelogId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "parentCommentId": {
+            "type": "string"
+          },
+          "isPrivate": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email"
+            ],
+            "additionalProperties": false
+          },
+          "upvotes": {
+            "type": "number"
+          },
+          "downvotes": {
+            "type": "number"
+          },
+          "score": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "isPrivate",
+          "createdAt",
+          "updatedAt",
+          "author",
+          "upvotes",
+          "downvotes",
+          "score",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createComment",
+      "schemaHash": "7008899101527afa62089e447f8b292e78d5868d282e4c43736a1659c7637c4d"
+    },
+    {
+      "id": "featurebase.create_company",
+      "name": "Create Featurebase Company",
+      "description": "Create a new company",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Company name"
+          },
+          "companyId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unique external company identifier"
+          },
+          "website": {
+            "type": "string",
+            "description": "Company website URL"
+          },
+          "plan": {
+            "type": "string",
+            "description": "Company plan/tier"
+          },
+          "industry": {
+            "type": "string",
+            "description": "Company industry"
+          },
+          "monthlySpend": {
+            "type": "number",
+            "description": "Monthly spend amount"
+          },
+          "companySize": {
+            "type": "integer",
+            "description": "Number of employees"
+          }
+        },
+        "required": [
+          "name",
+          "companyId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "companyId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "linkedUsers": {
+                "type": "number"
+              },
+              "lastActivity": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "plan": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "website": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "linkedUsers"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "company",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createCompany",
+      "schemaHash": "4d03df6a3057ff96d91cdb28f79af651be3fff211b727fbd0b8878ca38e29891"
+    },
+    {
+      "id": "featurebase.create_custom_field",
+      "name": "Create Featurebase Custom Field",
+      "description": "Create a new custom field definition",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Field name (snake_case recommended)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "number",
+              "boolean",
+              "date",
+              "array"
+            ],
+            "description": "Field type: string, number, boolean, date, array"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Valid values for string enum fields"
+          },
+          "min": {
+            "type": "number",
+            "description": "Minimum value for number fields"
+          },
+          "max": {
+            "type": "number",
+            "description": "Maximum value for number fields"
+          },
+          "itemType": {
+            "type": "string",
+            "description": "Type of array items (string or number)"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether field is required (default: false)"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "date",
+                  "array"
+                ]
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "itemType": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type",
+              "required",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "field",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createCustomField",
+      "schemaHash": "d7489e80a15e963dd6e26e7360c51c799360934b9f8549ab9a1ae51bbfe0af8b"
+    },
+    {
+      "id": "featurebase.create_post",
+      "name": "Create Featurebase Post",
+      "description": "Create a new post.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Post title"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Post content (markdown supported)"
+          },
+          "categoryId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category ID where post will be created"
+          },
+          "statusId": {
+            "type": "string",
+            "description": "Optional status ID"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional tags"
+          }
+        },
+        "required": [
+          "title",
+          "content",
+          "categoryId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "post": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "categoryId": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "lastModified": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "categoryId",
+              "date",
+              "lastModified"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "post",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createPost",
+      "schemaHash": "dc7b6df71abe02c1b602c22792e5acb3faa520c13abe7c759c16b5892bcf23db"
+    },
+    {
+      "id": "featurebase.create_webhook",
+      "name": "Create Featurebase Webhook",
+      "description": "Create a new webhook subscription",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Webhook name"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "format": "uri",
+            "description": "Webhook destination URL"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Event topics to subscribe to (e.g. [\"post.created\", \"post.voted\", \"post.updated\", \"post.deleted\", \"comment.created\", \"changelog.published\"])"
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional webhook description"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "topics"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "webhook": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "topics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "status": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "url",
+              "topics",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "webhook",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createWebhook",
+      "schemaHash": "251b34f071054017edbce88f773642ea4c06ae5e63313c003fb7140be8d0496c"
+    },
+    {
+      "id": "featurebase.delete_article",
+      "name": "Delete Featurebase Article",
+      "description": "Delete an article",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "articleId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Article ID to delete"
+          }
+        },
+        "required": [
+          "articleId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "articleId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "articleId",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteArticle",
+      "schemaHash": "1d789f3d00d21e5168393690ec97e39bbe867ca64a539083c54afd3a3c2e2d74"
+    },
+    {
+      "id": "featurebase.delete_changelog",
+      "name": "Delete Featurebase Changelog Entry",
+      "description": "Delete a changelog entry",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changelogId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Changelog ID to delete"
+          }
+        },
+        "required": [
+          "changelogId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "changelogId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "changelogId",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteChangelog",
+      "schemaHash": "6e41ce896251a53207e20b1ff04c4e6deada81ab92c809fda7c4b8a1d3bbcbca"
+    },
+    {
+      "id": "featurebase.delete_collection",
+      "name": "Delete Featurebase Collection",
+      "description": "Delete a help center collection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "collectionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Collection ID to delete"
+          }
+        },
+        "required": [
+          "collectionId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "collectionId",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteCollection",
+      "schemaHash": "01b80438a966dd2f01722444c527f855fbe3f9a455ce5a4aad69c9f08f414897"
+    },
+    {
+      "id": "featurebase.delete_comment",
+      "name": "Delete Featurebase Comment",
+      "description": "Delete a comment from a post or changelog (soft-deletes if replies exist)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Comment ID to delete"
+          }
+        },
+        "required": [
+          "commentId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "commentId": {
+            "type": "string"
+          },
+          "deletionType": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "soft"
+            ]
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "commentId",
+          "deletionType",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteComment",
+      "schemaHash": "511583f9a21a9f0d33c9e034ab238369d4de38c0c379ecd073a1cbba4589a647"
+    },
+    {
+      "id": "featurebase.delete_post",
+      "name": "Delete Featurebase Post",
+      "description": "Delete a post.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "postId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Post ID to delete"
+          }
+        },
+        "required": [
+          "postId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "postId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "postId",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deletePost",
+      "schemaHash": "ef8aadebe8f728d0c040edb916514f4e368fc594bbaf5c9c1e9a1cda738e6cce"
+    },
+    {
+      "id": "featurebase.delete_user",
+      "name": "Delete Featurebase User",
+      "description": "Delete a user by email or userId",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email to delete"
+          },
+          "userId": {
+            "type": "string",
+            "description": "Your system user ID to delete"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteUser",
+      "schemaHash": "d7624ba971aa51ef1867d852f329a1c99ec02fe17a690ce3c60d3962c1e91c0d"
+    },
+    {
+      "id": "featurebase.delete_webhook",
+      "name": "Delete Featurebase Webhook",
+      "description": "Delete a webhook",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "webhookId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Webhook ID to delete"
+          }
+        },
+        "required": [
+          "webhookId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "webhookId": {
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "webhookId",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteWebhook",
+      "schemaHash": "b0f9d187f56a5d21fc6f4ca3cd300fb6fadcbde017eeb38cef88f1c6965e5d20"
+    },
+    {
+      "id": "featurebase.get_article",
+      "name": "Get Featurebase Article",
+      "description": "Get a single article by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "articleId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Article ID to retrieve"
+          }
+        },
+        "required": [
+          "articleId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "article": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "category",
+              "publishedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "article",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getArticle",
+      "schemaHash": "476be06b9350561db1ba6098a11a8e3f8ded9d369ab3ebd8917fbe21301b170a"
+    },
+    {
+      "id": "featurebase.get_changelog",
+      "name": "Get Featurebase Changelog Entry",
+      "description": "Get a single changelog entry by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changelogId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Changelog ID to retrieve"
+          }
+        },
+        "required": [
+          "changelogId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "publishedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "entry",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getChangelog",
+      "schemaHash": "a71be2c60f164d98e868d86097afe6e5588325c0a9137af9aaf24c175fdf3fc0"
+    },
+    {
+      "id": "featurebase.get_post",
+      "name": "Get Featurebase Post",
+      "description": "Get a single post by ID.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "postId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Post ID to retrieve"
+          }
+        },
+        "required": [
+          "postId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "post": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "statusId": {
+                "type": "string"
+              },
+              "categoryId": {
+                "type": "string"
+              },
+              "categoryName": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "lastModified": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "upvotes": {
+                "type": "number"
+              },
+              "commentCount": {
+                "type": "number"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "author": {
+                "type": "string"
+              },
+              "authorEmail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "status",
+              "categoryId",
+              "date",
+              "lastModified",
+              "upvotes",
+              "commentCount",
+              "tags"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "post",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getPost",
+      "schemaHash": "3b1456c7e6207ab77d810637c9c60d71c673929b22eb9523e7313bf59c418cef"
+    },
+    {
+      "id": "featurebase.get_user",
+      "name": "Get Featurebase User",
+      "description": "Get a user by email or userId",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address"
+          },
+          "userId": {
+            "type": "string",
+            "description": "User ID from your system"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "customFields": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "companies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "monthlySpend": {
+                      "type": "number"
+                    },
+                    "customFields": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "lastActivity": {
+                "type": "string"
+              },
+              "totalPosts": {
+                "type": "number"
+              },
+              "totalComments": {
+                "type": "number"
+              },
+              "totalUpvotes": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "user",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getUser",
+      "schemaHash": "f48d7d44f506754c7b2e026f052e7d9e1b39d1d7245fcd0f2cfad39143b2d10b"
+    },
+    {
+      "id": "featurebase.identify_user",
+      "name": "Identify Featurebase User",
+      "description": "Identify or update a user in FeatureBase (upsert)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email address"
+          },
+          "userId": {
+            "type": "string",
+            "description": "User ID"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "User name"
+          },
+          "customFields": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Custom user fields"
+          },
+          "companies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "monthlySpend": {
+                  "type": "number"
+                },
+                "customFields": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Associated companies"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "customFields": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "companies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "monthlySpend": {
+                      "type": "number"
+                    },
+                    "customFields": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "user",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#identifyUser",
+      "schemaHash": "e7b3e989a1499de77d3f343de9facfe4effb45d357ce3de4003b0eb1b06bf398"
+    },
+    {
+      "id": "featurebase.list_articles",
+      "name": "List Featurebase Articles",
+      "description": "List articles with filtering and pagination",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of articles to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          },
+          "category": {
+            "type": "string",
+            "description": "Filter by category"
+          },
+          "q": {
+            "type": "string",
+            "description": "Search query for title/content"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "publishedAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "content",
+                "category",
+                "publishedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "articles",
+          "nextCursor",
+          "totalCount",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listArticles",
+      "schemaHash": "e55bbfaf3fb15272fa7ba3c43798f679bf56070ef903ad3df232afbe94d73e74"
+    },
+    {
+      "id": "featurebase.list_boards",
+      "name": "List Featurebase Boards",
+      "description": "List all feedback boards",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "boards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "icon": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "boards",
+          "totalCount",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listBoards",
+      "schemaHash": "03339b3d54cb433230f01ab56d535c2f591e45fd268e264840d47b96354fef82"
+    },
+    {
+      "id": "featurebase.list_changelog",
+      "name": "List Featurebase Changelog Entries",
+      "description": "List changelog entries with filtering and pagination",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of changelog entries to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by tag names"
+          },
+          "q": {
+            "type": "string",
+            "description": "Search query for title/content"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "publishedAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "content",
+                "publishedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "entries",
+          "nextCursor",
+          "totalCount",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listChangelog",
+      "schemaHash": "1044cec4c5914d6eb8bb4c492438166afa7a6de87cc1302e8842d51c0d7b1bdc"
+    },
+    {
+      "id": "featurebase.list_collections",
+      "name": "List Featurebase Collections",
+      "description": "List help center collections with optional filtering by parentId and pagination",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of collections to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Filter by parent collection ID (omit for top-level collections)"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "parentId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "helpCenterId": {
+                  "type": "string"
+                },
+                "articleCount": {
+                  "type": "number"
+                },
+                "order": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "slug",
+                "parentId",
+                "helpCenterId",
+                "articleCount",
+                "order",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "collections",
+          "nextCursor",
+          "totalCount",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listCollections",
+      "schemaHash": "41fc5e1b18a0db3513ff39133b27310eb90b2c779834ba33c78d0b9e748ad549"
+    },
+    {
+      "id": "featurebase.list_comments",
+      "name": "List Featurebase Comments",
+      "description": "List comments for a post or changelog with filtering and pagination",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "submissionId": {
+            "type": "string",
+            "description": "Filter by post ID"
+          },
+          "changelogId": {
+            "type": "string",
+            "description": "Filter by changelog ID"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of comments to return (1-100)"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Page number for pagination"
+          },
+          "sortBy": {
+            "type": "string",
+            "enum": [
+              "newest",
+              "oldest",
+              "popular"
+            ],
+            "description": "Sort order for comments"
+          },
+          "includePrivate": {
+            "type": "boolean",
+            "description": "Include private comments (admin only)"
+          },
+          "includeDeleted": {
+            "type": "boolean",
+            "description": "Include soft-deleted comments"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "comments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "author": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                "parentCommentId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "isPrivate": {
+                  "type": "boolean"
+                },
+                "isPinned": {
+                  "type": "boolean"
+                },
+                "upvotes": {
+                  "type": "number"
+                },
+                "replyCount": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "content",
+                "createdAt",
+                "author",
+                "parentCommentId",
+                "isPrivate",
+                "isPinned",
+                "upvotes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "totalResults": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "comments",
+          "page",
+          "totalPages",
+          "totalResults",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listComments",
+      "schemaHash": "9030e150ae5b23659451e36b93527bd6027718d9581f889c42d0c65435813e3f"
+    },
+    {
+      "id": "featurebase.list_companies",
+      "name": "List Featurebase Companies",
+      "description": "List companies with pagination",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of companies to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "companyId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "linkedUsers": {
+                  "type": "number"
+                },
+                "lastActivity": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "plan": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "website": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "linkedUsers"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "companies",
+          "nextCursor",
+          "totalCount",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listCompanies",
+      "schemaHash": "aefe8cf1594c190e812847f1fdc4c0c75cee271082c4288c158c96b90622a40d"
+    },
+    {
+      "id": "featurebase.list_custom_fields",
+      "name": "List Featurebase Custom Fields",
+      "description": "List all custom field definitions",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "date",
+                    "array"
+                  ]
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                },
+                "itemType": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "required",
+                "createdAt",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "fields",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listCustomFields",
+      "schemaHash": "e7aeb8d1d3d53b0631319028d0bc5e81f0123d3f598381906f80a9babe363cf0"
+    },
+    {
+      "id": "featurebase.list_posts",
+      "name": "List Featurebase Posts",
+      "description": "List posts with filtering and pagination.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of posts to return (1-100, default 10)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          },
+          "categoryId": {
+            "type": "string",
+            "description": "Filter by category ID"
+          },
+          "statusId": {
+            "type": "string",
+            "description": "Filter by status ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "in-progress",
+              "complete",
+              "planned",
+              "archived"
+            ],
+            "description": "Filter by status label"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by tag names"
+          },
+          "q": {
+            "type": "string",
+            "description": "Search query for title/content"
+          },
+          "sortBy": {
+            "type": "string",
+            "enum": [
+              "createdAt",
+              "upvotes",
+              "trending"
+            ],
+            "description": "Sort order (default createdAt)"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "posts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "categoryId": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "lastModified": {
+                  "type": "string"
+                },
+                "upvotes": {
+                  "type": "number"
+                },
+                "commentCount": {
+                  "type": "number"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "author": {
+                  "type": "string"
+                },
+                "authorEmail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "content",
+                "status",
+                "categoryId",
+                "date",
+                "lastModified",
+                "upvotes",
+                "tags"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "totalResults": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "posts",
+          "page",
+          "totalPages",
+          "totalResults",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listPosts",
+      "schemaHash": "f461eb77a8f03fde7623d9e5c0ce9617a1bdb83f868996bb4ef00a8e63484255"
+    },
+    {
+      "id": "featurebase.list_users",
+      "name": "List Featurebase Users",
+      "description": "List identified users with pagination, filtering, and sorting",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of users to return per page (1-100, default: 10)"
+          },
+          "sortBy": {
+            "type": "string",
+            "enum": [
+              "topPosters",
+              "topCommenters",
+              "lastActivity"
+            ],
+            "description": "Sort order (topPosters, topCommenters, lastActivity)"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "customFields": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "companies": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "monthlySpend": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "lastActivity": {
+                  "type": "string"
+                },
+                "totalPosts": {
+                  "type": "number"
+                },
+                "totalComments": {
+                  "type": "number"
+                },
+                "totalUpvotes": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "email",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "limit": {
+            "type": "number"
+          },
+          "totalResults": {
+            "type": "number"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "users",
+          "limit",
+          "totalResults",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listUsers",
+      "schemaHash": "1ad4307ce317cad1fd669a6f393e1e7d062eee2c66c4300f5525948ccec8b7dc"
+    },
+    {
+      "id": "featurebase.list_webhooks",
+      "name": "List Featurebase Webhooks",
+      "description": "List webhooks with pagination (secret is excluded from output)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of webhooks to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor from previous response"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "webhooks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "topics": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "status": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "url",
+                "topics",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "webhooks",
+          "nextCursor",
+          "totalCount",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listWebhooks",
+      "schemaHash": "922ad6ff586074f4ed8593bc4b1f51d1c083ab9b3c3fcb0d07dbbf52e638c367"
+    },
+    {
+      "id": "featurebase.update_article",
+      "name": "Update Featurebase Article",
+      "description": "Update an article",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "articleId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Article ID to update"
+          },
+          "title": {
+            "type": "string",
+            "description": "Updated title"
+          },
+          "content": {
+            "type": "string",
+            "description": "Updated content"
+          },
+          "category": {
+            "type": "string",
+            "description": "Updated category"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Updated slug"
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "Collection ID to move this article to (from list-collections)"
+          }
+        },
+        "required": [
+          "articleId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "article": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "category",
+              "publishedAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "article",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateArticle",
+      "schemaHash": "69d12f28fdc7597e98b1e8ea388f9194f831bd90cfccd250906d281ca08c56cc"
+    },
+    {
+      "id": "featurebase.update_changelog",
+      "name": "Update Featurebase Changelog Entry",
+      "description": "Update an existing changelog entry",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changelogId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Changelog ID to update"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Changelog title"
+          },
+          "content": {
+            "type": "string",
+            "description": "Changelog content (markdown supported)"
+          },
+          "publishedAt": {
+            "type": "string",
+            "description": "Publication date (ISO 8601 format)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags"
+          }
+        },
+        "required": [
+          "changelogId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "publishedAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "publishedAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "entry",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateChangelog",
+      "schemaHash": "2e58ede407328dee4ac1aa7c589bbac6b6602b6f44635eb522718e51ce50b69a"
+    },
+    {
+      "id": "featurebase.update_collection",
+      "name": "Update Featurebase Collection",
+      "description": "Update an existing help center collection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "collectionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Collection ID to update (used as path parameter)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Updated collection name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Updated collection description"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Updated parent collection ID (for nesting)"
+          }
+        },
+        "required": [
+          "collectionId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "helpCenterId": {
+                "type": "string"
+              },
+              "articleCount": {
+                "type": "number"
+              },
+              "order": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "parentId",
+              "helpCenterId",
+              "articleCount",
+              "order",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "collection",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateCollection",
+      "schemaHash": "f21c348de95f090bf281d78ae4df29514658a48f92c0576929ceca9ab150dd7d"
+    },
+    {
+      "id": "featurebase.update_comment",
+      "name": "Update Featurebase Comment",
+      "description": "Update an existing comment's content, pin status, or privacy settings",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Comment ID to update"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Updated comment content"
+          },
+          "isPinned": {
+            "type": "boolean",
+            "description": "Whether the comment is pinned"
+          },
+          "isPrivate": {
+            "type": "boolean",
+            "description": "Whether the comment is private"
+          }
+        },
+        "required": [
+          "commentId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "submissionId": {
+            "type": "string"
+          },
+          "changelogId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "parentCommentId": {
+            "type": "string"
+          },
+          "isPrivate": {
+            "type": "boolean"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email"
+            ],
+            "additionalProperties": false
+          },
+          "upvotes": {
+            "type": "number"
+          },
+          "downvotes": {
+            "type": "number"
+          },
+          "score": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "isPrivate",
+          "createdAt",
+          "updatedAt",
+          "author",
+          "upvotes",
+          "downvotes",
+          "score",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateComment",
+      "schemaHash": "ab6bb7e53a3b8df359132ee4776e54b3cac5f70610f952e3c6534b9ea8a9adcb"
+    },
+    {
+      "id": "featurebase.update_post",
+      "name": "Update Featurebase Post",
+      "description": "Update an existing post.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "postId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Post ID to update"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Post title"
+          },
+          "content": {
+            "type": "string",
+            "description": "Post content (markdown supported)"
+          },
+          "statusId": {
+            "type": "string",
+            "description": "Status ID"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags"
+          }
+        },
+        "required": [
+          "postId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "post": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "lastModified": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "content",
+              "lastModified"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "post",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "FEATUREBASE_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updatePost",
+      "schemaHash": "9bad460554c6e43c97cc5fc63b115ee294992c2dfa8f45f995e09f40fbcc1f62"
+    }
+  ]
+}

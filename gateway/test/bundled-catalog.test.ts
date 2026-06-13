@@ -29,12 +29,12 @@ describe("bundled catalog default boot (WS-B / O5)", () => {
     bundleCatalog();
   });
 
-  it("buildIndex finds exactly the 5 tools and 7 skills", () => {
+  it("buildIndex finds exactly the 40 tools and 7 skills", () => {
     const index = buildIndex(BUNDLE_DIR);
     const skills = index.filter((e) => e.kind === "skill");
     const tools = index.filter((e) => e.kind === "tool");
     expect(skills.length).toBe(7);
-    expect(tools.length).toBe(5);
+    expect(tools.length).toBe(40);
     expect(tools.map((t) => t.id).sort()).toEqual(
       [
         "context7.get-library-docs",
@@ -42,6 +42,41 @@ describe("bundled catalog default boot (WS-B / O5)", () => {
         "linear.list_issues",
         "perplexity.ask",
         "perplexity.search",
+        "featurebase.list_posts",
+        "featurebase.get_post",
+        "featurebase.create_post",
+        "featurebase.update_post",
+        "featurebase.delete_post",
+        "featurebase.list_changelog",
+        "featurebase.get_changelog",
+        "featurebase.create_changelog",
+        "featurebase.update_changelog",
+        "featurebase.delete_changelog",
+        "featurebase.list_collections",
+        "featurebase.create_collection",
+        "featurebase.update_collection",
+        "featurebase.delete_collection",
+        "featurebase.list_articles",
+        "featurebase.get_article",
+        "featurebase.create_article",
+        "featurebase.update_article",
+        "featurebase.delete_article",
+        "featurebase.list_comments",
+        "featurebase.create_comment",
+        "featurebase.update_comment",
+        "featurebase.delete_comment",
+        "featurebase.identify_user",
+        "featurebase.get_user",
+        "featurebase.list_users",
+        "featurebase.delete_user",
+        "featurebase.list_companies",
+        "featurebase.create_company",
+        "featurebase.list_webhooks",
+        "featurebase.create_webhook",
+        "featurebase.delete_webhook",
+        "featurebase.list_custom_fields",
+        "featurebase.create_custom_field",
+        "featurebase.list_boards",
       ].sort(),
     );
   });
