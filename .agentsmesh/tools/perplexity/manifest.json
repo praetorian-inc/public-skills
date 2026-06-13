@@ -83,6 +83,189 @@
       "schemaHash": "064191e5b950d10d5facea421897fa754479dddc9d55ae38d5b2a20dc63d6dd1"
     },
     {
+      "id": "perplexity.reason",
+      "name": "Perplexity Reason",
+      "description": "Advanced reasoning and problem-solving with step-by-step analysis.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "user",
+                    "assistant"
+                  ],
+                  "description": "Role of the message sender"
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content of the message"
+                }
+              },
+              "required": [
+                "role",
+                "content"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "description": "Array of conversation messages"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Convenience: auto-wrapped into a messages array"
+          },
+          "strip_thinking": {
+            "type": "boolean",
+            "description": "If true, removes <think>...</think> tags to save context tokens"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Reasoning response, may include <think> tags"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "messageCount": {
+                "type": "number"
+              },
+              "thinkingStripped": {
+                "type": "boolean"
+              },
+              "hasThinkingTags": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "messageCount",
+              "thinkingStripped",
+              "hasThinkingTags"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "PERPLEXITY_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#perplexityReason",
+      "schemaHash": "0077e2bb43b2edbdca1e8cdddc4237846d140af92595535823d1f6fd62439cf1"
+    },
+    {
+      "id": "perplexity.research",
+      "name": "Perplexity Research",
+      "description": "Deep research with comprehensive analysis and citations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "user",
+                    "assistant"
+                  ],
+                  "description": "Role of the message sender"
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content of the message"
+                }
+              },
+              "required": [
+                "role",
+                "content"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "description": "Array of conversation messages"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Convenience: auto-wrapped into a messages array"
+          },
+          "strip_thinking": {
+            "type": "boolean",
+            "description": "If true, removes <think>...</think> tags to save context tokens"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Research findings as plain text with citations"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "messageCount": {
+                "type": "number"
+              },
+              "citationCount": {
+                "type": "number"
+              },
+              "thinkingStripped": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "messageCount",
+              "thinkingStripped"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "PERPLEXITY_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#perplexityResearch",
+      "schemaHash": "2e1594ec21db68db9d463777d7f363c195bd825f9e67a6772b0c3084148b44f7"
+    },
+    {
       "id": "perplexity.search",
       "name": "Perplexity Search",
       "description": "Perform web search using the Perplexity Search API with ranked results.",

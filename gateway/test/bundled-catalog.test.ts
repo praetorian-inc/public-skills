@@ -29,18 +29,20 @@ describe("bundled catalog default boot (WS-B / O5)", () => {
     bundleCatalog();
   });
 
-  it("buildIndex finds exactly the 97 tools and 7 skills", () => {
+  it("buildIndex finds exactly the 99 tools and 7 skills", () => {
     const index = buildIndex(BUNDLE_DIR);
     const skills = index.filter((e) => e.kind === "skill");
     const tools = index.filter((e) => e.kind === "tool");
     expect(skills.length).toBe(7);
-    expect(tools.length).toBe(97);
+    expect(tools.length).toBe(99);
     expect(tools.map((t) => t.id).sort()).toEqual(
       [
         "context7.get-library-docs",
         "context7.resolve-library-id",
         "linear.list_issues",
         "perplexity.ask",
+        "perplexity.reason",
+        "perplexity.research",
         "perplexity.search",
         "featurebase.list_posts",
         "featurebase.get_post",

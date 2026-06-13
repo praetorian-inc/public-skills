@@ -82,6 +82,10 @@ const PERPLEXITY_BASE = "https://api.perplexity.ai";
 /** sonar-pro is the marketplace `ask` model (client.ts:57-58). */
 const ASK_MODEL = "sonar-pro";
 const REQUEST_TIMEOUT_MS = 60_000;
+/** Reason/research use longer-running Sonar models (client.ts SONAR_MODELS + 120s timeout). */
+const RESEARCH_MODEL = "sonar-deep-research";
+const REASON_MODEL = "sonar-reasoning-pro";
+const LONG_REQUEST_TIMEOUT_MS = 120_000;
 /** Truncate responses for token efficiency (marketplace keeps first 3000 chars). */
 const MAX_CONTENT_CHARS = 3000;
 
@@ -288,6 +292,207 @@ export const perplexityAsk: ToolDescriptor<AskInput, AskOutput> = {
     return {
       content: finalizeContent(content, body.citations ?? []),
       metadata: { messageCount: effectiveMessages.length },
+    };
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// perplexity.research
+// ════════════════════════════════════════════════════════════════════════════
+
+const researchInput = z
+  .object({
+    messages: z
+      .array(messageSchema)
+      .min(1, "At least one message is required")
+      .optional()
+      .describe("Array of conversation messages"),
+    query: z
+      .string()
+      .min(1, "Query cannot be empty")
+      .optional()
+      .describe("Convenience: auto-wrapped into a messages array"),
+    strip_thinking: z
+      .boolean()
+      .optional()
+      .describe("If true, removes <think>...</think> tags to save context tokens"),
+  })
+  .refine((data) => data.messages != null || data.query != null, "Either messages or query is required");
+
+const researchOutput = z.object({
+  content: z.string().describe("Research findings as plain text with citations"),
+  metadata: z
+    .object({
+      messageCount: z.number(),
+      citationCount: z.number().optional(),
+      thinkingStripped: z.boolean(),
+    })
+    .optional(),
+});
+
+type ResearchInput = z.infer<typeof researchInput>;
+type ResearchOutput = z.infer<typeof researchOutput>;
+
+export const perplexityResearch: ToolDescriptor<ResearchInput, ResearchOutput> = {
+  id: "perplexity.research",
+  name: "Perplexity Research",
+  description: "Deep research with comprehensive analysis and citations.",
+  auth: ["PERPLEXITY_API_KEY"],
+  wraps: { type: "rest" },
+  input: researchInput,
+  output: researchOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.PERPLEXITY_API_KEY;
+    const effectiveMessages =
+      args.messages ?? [{ role: "user" as const, content: args.query as string }];
+
+    const res = await activeFetch(`${PERPLEXITY_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
+      body: JSON.stringify({ model: RESEARCH_MODEL, messages: effectiveMessages }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Perplexity chat/completions HTTP ${res.status}`);
+    }
+
+    const body = (await res.json()) as ChatResponseBody;
+    let content = body.choices?.[0]?.message?.content ?? "";
+
+    if (args.strip_thinking) {
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    }
+
+    if (!content || content.trim() === "") {
+      throw new Error("Empty response from Perplexity research");
+    }
+
+    // Count inline [N] citation markers on the answer BEFORE appending the Sources list.
+    const citationMatches = content.match(/\[\d+\]/g);
+    const citationCount = citationMatches ? citationMatches.length : 0;
+
+    const citations = body.citations ?? [];
+    if (citations.length > 0) {
+      content += "\n\nSources:\n" + citations.map((u) => `- ${u}`).join("\n");
+    }
+
+    // Research keeps the first 8000 chars (more than the 3000 ask/search budget).
+    const truncated =
+      content.length > 8000
+        ? content.substring(0, 8000) + "\n... [truncated for token efficiency]"
+        : content;
+
+    return {
+      content: truncated,
+      metadata: {
+        messageCount: effectiveMessages.length,
+        citationCount,
+        thinkingStripped: args.strip_thinking || false,
+      },
+    };
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// perplexity.reason
+// ════════════════════════════════════════════════════════════════════════════
+
+const reasonInput = z
+  .object({
+    messages: z
+      .array(messageSchema)
+      .min(1, "At least one message is required")
+      .optional()
+      .describe("Array of conversation messages"),
+    query: z
+      .string()
+      .min(1, "Query cannot be empty")
+      .optional()
+      .describe("Convenience: auto-wrapped into a messages array"),
+    strip_thinking: z
+      .boolean()
+      .optional()
+      .describe("If true, removes <think>...</think> tags to save context tokens"),
+  })
+  .refine((data) => data.messages != null || data.query != null, "Either messages or query is required");
+
+const reasonOutput = z.object({
+  content: z.string().describe("Reasoning response, may include <think> tags"),
+  metadata: z
+    .object({
+      messageCount: z.number(),
+      thinkingStripped: z.boolean(),
+      hasThinkingTags: z.boolean(),
+    })
+    .optional(),
+});
+
+type ReasonInput = z.infer<typeof reasonInput>;
+type ReasonOutput = z.infer<typeof reasonOutput>;
+
+export const perplexityReason: ToolDescriptor<ReasonInput, ReasonOutput> = {
+  id: "perplexity.reason",
+  name: "Perplexity Reason",
+  description: "Advanced reasoning and problem-solving with step-by-step analysis.",
+  auth: ["PERPLEXITY_API_KEY"],
+  wraps: { type: "rest" },
+  input: reasonInput,
+  output: reasonOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.PERPLEXITY_API_KEY;
+    const effectiveMessages =
+      args.messages ?? [{ role: "user" as const, content: args.query as string }];
+
+    const res = await activeFetch(`${PERPLEXITY_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
+      body: JSON.stringify({ model: REASON_MODEL, messages: effectiveMessages }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Perplexity chat/completions HTTP ${res.status}`);
+    }
+
+    const body = (await res.json()) as ChatResponseBody;
+    let content = body.choices?.[0]?.message?.content ?? "";
+
+    if (args.strip_thinking) {
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    }
+
+    if (!content || content.trim() === "") {
+      throw new Error("Empty response from Perplexity reason");
+    }
+
+    // Detect think tags on the (possibly already stripped) content.
+    const hasThinkingTags = content.includes("<think>") && content.includes("</think>");
+
+    const citations = body.citations ?? [];
+    if (citations.length > 0) {
+      content += "\n\nSources:\n" + citations.map((u) => `- ${u}`).join("\n");
+    }
+
+    // Reasoning keeps the first 5000 chars.
+    const truncated =
+      content.length > 5000
+        ? content.substring(0, 5000) + "\n... [truncated for token efficiency]"
+        : content;
+
+    return {
+      content: truncated,
+      metadata: {
+        messageCount: effectiveMessages.length,
+        thinkingStripped: args.strip_thinking || false,
+        hasThinkingTags,
+      },
     };
   },
 };
