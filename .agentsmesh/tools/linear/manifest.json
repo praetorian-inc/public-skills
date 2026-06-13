@@ -3,6 +3,770 @@
   "service": "linear",
   "tools": [
     {
+      "id": "linear.archive_issue",
+      "name": "Archive Linear Issue",
+      "description": "Archive an issue in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID or identifier"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "entity": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "archivedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "archivedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "entity",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#archiveIssue",
+      "schemaHash": "b474568831e173c8de8175ce44d3039b110784ba588058418f60bb2ed5eebe20"
+    },
+    {
+      "id": "linear.create_issue",
+      "name": "Create Linear Issue",
+      "description": "Create a new issue in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Issue description (Markdown)"
+          },
+          "team": {
+            "type": "string",
+            "description": "Team name or ID"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "User ID, name, email, or \"me\""
+          },
+          "state": {
+            "type": "string",
+            "description": "State type, name, or ID"
+          },
+          "priority": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "0=No priority, 1=Urgent, 2=High, 3=Normal, 4=Low"
+          },
+          "project": {
+            "type": "string",
+            "description": "Project name or ID"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Label names or IDs"
+          },
+          "dueDate": {
+            "type": "string",
+            "description": "Due date (ISO format)"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Parent issue identifier (e.g., RT-252) or ID - resolves to parentId"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Parent issue ID for sub-issues"
+          },
+          "cycle": {
+            "type": "string",
+            "description": "Cycle (sprint) ID or name - will be set via update after creation"
+          },
+          "templateId": {
+            "type": "string",
+            "description": "Issue template ID to apply"
+          },
+          "autoApplyProjectTemplate": {
+            "type": "boolean",
+            "description": "Automatically find and apply template for the specified project"
+          }
+        },
+        "required": [
+          "title",
+          "team"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "issue": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "title",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "issue",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createIssue",
+      "schemaHash": "ad2bd37a6bf4019554e28db0f30d2dfc5480eddacd5259f0def66e3fb7071a7a"
+    },
+    {
+      "id": "linear.find_issue",
+      "name": "Find Linear Issue",
+      "description": "Smart issue finder - handles partial IDs and searches with disambiguation",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID, identifier, number, or search text"
+          },
+          "team": {
+            "type": "string",
+            "description": "Team name to narrow search (optional)"
+          },
+          "maxResults": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Max matches to return for disambiguation"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "found"
+              },
+              "issue": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "priorityLabel": {
+                    "type": "string"
+                  },
+                  "estimate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "assignee": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "email"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "project": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cycle": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parent": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "identifier"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dueDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "branchName": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  },
+                  "updatedAt": {
+                    "type": "string"
+                  },
+                  "attachments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "estimatedTokens": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "identifier",
+                  "title",
+                  "estimatedTokens"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "status",
+              "issue"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "disambiguation_needed"
+              },
+              "message": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "assignee": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "identifier",
+                    "title"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "hint": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "message",
+              "query",
+              "candidates",
+              "hint"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "not_found"
+              },
+              "message": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "suggestions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "message",
+              "query",
+              "suggestions"
+            ],
+            "additionalProperties": false
+          }
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#findIssue",
+      "schemaHash": "71aab25c8012f6670b81de8c6554ae1bc63e2bdd7cfd81d54861a35cd9b29770"
+    },
+    {
+      "id": "linear.get_issue",
+      "name": "Get Linear Issue",
+      "description": "Get detailed information about a specific Linear issue",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID or identifier (e.g., ENG-1366 or UUID)"
+          },
+          "fullDescription": {
+            "type": "boolean",
+            "description": "Return full description without truncation (default: false, truncates to 500 chars)"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "priority": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "priorityLabel": {
+            "type": "string"
+          },
+          "estimate": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "email"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cycle": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "identifier": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "identifier"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "branchName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getIssue",
+      "schemaHash": "dbf8d17240252d639dd605bcfb60ee78ddbcec165ebc418b6524602441eed48a"
+    },
+    {
       "id": "linear.list_issues",
       "name": "List Linear Issues",
       "description": "List issues from Linear with optional filters (team, assignee, state, query, …).",
@@ -223,6 +987,211 @@
       },
       "entry": "wrapper.ts#listIssues",
       "schemaHash": "d5f62a1c2cba9aada2ecd8ca85166efd8f3681d95e211bd3875deca29f042716"
+    },
+    {
+      "id": "linear.unarchive_issue",
+      "name": "Unarchive Linear Issue",
+      "description": "Unarchive an issue in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID or identifier"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "entity": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "archivedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "archivedAt"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "entity",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#unarchiveIssue",
+      "schemaHash": "7175e3e83c8e4f09b88e7f7f5c747f4ed99e5a0b4e59c249eaf602f3b1e25542"
+    },
+    {
+      "id": "linear.update_issue",
+      "name": "Update Linear Issue",
+      "description": "Update an existing issue in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Issue ID or identifier"
+          },
+          "title": {
+            "type": "string",
+            "description": "New title"
+          },
+          "description": {
+            "type": "string",
+            "description": "New description (Markdown)"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "User ID, name, email, or \"me\""
+          },
+          "state": {
+            "type": "string",
+            "description": "State type, name, or ID"
+          },
+          "priority": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "0=No priority, 1=Urgent, 2=High, 3=Normal, 4=Low"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Project name or ID (set to null to remove issue from project)"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Label names or IDs"
+          },
+          "dueDate": {
+            "type": "string",
+            "description": "Due date (ISO format)"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Parent issue identifier (e.g., RT-252) or ID - resolves to parentId"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Parent issue ID for sub-issues"
+          },
+          "cycle": {
+            "type": "string",
+            "description": "Cycle (sprint) ID to assign issue to"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "url",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateIssue",
+      "schemaHash": "2f7cec3a0626c0e11ff31e7b1b051fd2fbe4bab708aa4cccd42ed4fce72fd141"
     }
   ]
 }

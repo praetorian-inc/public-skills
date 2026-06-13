@@ -296,3 +296,1479 @@ export const listIssues: ToolDescriptor<ListIssuesInput, ListIssuesOutput> = {
     return { ...base, estimatedTokens: estimateTokens(base) };
   },
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 1 — Shared scaffold (linearGraphQL + resolvers + safeText) and the
+// Issues family (get/create/update/find/archive/unarchive). Appended below the
+// reviewed-GO `listIssues` block; `listIssues` is left byte-identical.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 1.1 Shared GraphQL transport (mirrors marketplace parseGraphQLResponse) ───
+
+/** Minimal GraphQL envelope (mirrors marketplace GraphQLResponse). */
+interface GqlEnvelope<T> {
+  data?: T | null;
+  errors?: Array<{ message: string; path?: string[]; extensions?: Record<string, unknown> }>;
+}
+
+/**
+ * Execute a Linear GraphQL request via the injectable `activeFetch` transport.
+ * CTX-only: the caller passes `apiKey` (from `ctx.secrets.LINEAR_API_KEY`); it is sent in the
+ * `Authorization` header with NO "Bearer " prefix. Throws on HTTP !ok, on a non-empty
+ * `errors[]`, and on null/undefined `data` — mirroring marketplace `parseGraphQLResponse`.
+ */
+async function linearGraphQL<T>(
+  apiKey: string,
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<T> {
+  const res = await activeFetch(LINEAR_GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: apiKey },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) {
+    throw new Error(`Linear API HTTP ${res.status}`);
+  }
+  const env = (await res.json()) as GqlEnvelope<T>;
+  if (env.errors && env.errors.length > 0) {
+    throw new Error(`Linear GraphQL error: ${env.errors.map((e) => e.message).join("; ")}`);
+  }
+  if (env.data === null || env.data === undefined) {
+    throw new Error("No data returned from GraphQL query");
+  }
+  return env.data;
+}
+
+// ── 1.5 Free-text validator (whitespace-allowing) + safeText factory ──────────
+
+/** Allow \t \n \r (whitespace) but reject other control chars. */
+const CONTROL_CHARS_NO_WS = new RegExp("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]");
+const noControlCharsAllowWhitespace = (s: string): boolean => !CONTROL_CHARS_NO_WS.test(s);
+
+/**
+ * A free-text field (title/description/body): allows whitespace, rejects other control chars,
+ * path traversal, and command injection. Use for human-prose fields, NOT for IDs/filters.
+ */
+function safeText(describe: string) {
+  return z
+    .string()
+    .refine(noControlCharsAllowWhitespace, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe(describe);
+}
+
+// ── 1.2 isUUID + ID resolvers (inlined from lib/resolve-ids.ts; apiKey-taking) ─
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUUID(s: string): boolean {
+  return UUID_REGEX.test(s);
+}
+
+const WORKFLOW_STATES_QUERY = `
+  query WorkflowStates($teamId: ID!) {
+    workflowStates(filter: { team: { id: { eq: $teamId } } }) {
+      nodes {
+        id
+        name
+        type
+      }
+    }
+  }
+`;
+
+const VIEWER_QUERY = `
+  query Viewer {
+    viewer {
+      id
+    }
+  }
+`;
+
+const PROJECTS_FOR_RESOLUTION_QUERY = `
+  query ProjectsForResolution {
+    projects(first: 250, includeArchived: false) {
+      nodes {
+        id
+        name
+      }
+    }
+  }
+`;
+
+const TEAMS_QUERY = `
+  query TeamsForResolution {
+    teams(first: 250) {
+      nodes {
+        id
+        name
+        key
+      }
+    }
+  }
+`;
+
+const ISSUE_RESOLVE_QUERY = `
+  query IssueResolve($id: String!) {
+    issue(id: $id) {
+      id
+    }
+  }
+`;
+
+interface WorkflowStatesResponse {
+  workflowStates: {
+    nodes: Array<{ id: string; name: string; type: string }>;
+  };
+}
+
+interface ViewerResponse {
+  viewer: { id: string };
+}
+
+interface UsersResponse {
+  users: {
+    nodes: Array<{
+      id: string;
+      name: string;
+      email: string;
+      displayName?: string | null;
+      avatarUrl?: string | null;
+      active?: boolean | null;
+      admin?: boolean | null;
+      createdAt?: string | null;
+    }>;
+  };
+}
+
+interface ProjectsForResolutionResponse {
+  projects: {
+    nodes: Array<{ id: string; name: string }>;
+  };
+}
+
+interface TeamsResponse {
+  teams: {
+    nodes: Array<{ id: string; name: string; key?: string | null }>;
+  };
+}
+
+interface IssueResolveResponse {
+  issue: { id: string };
+}
+
+/** Resolve team name to team UUID (UUID pass-through; else match by name, case-insensitive). */
+async function resolveTeamId(apiKey: string, teamNameOrId: string): Promise<string> {
+  if (isUUID(teamNameOrId)) {
+    return teamNameOrId;
+  }
+
+  const response = await linearGraphQL<TeamsResponse>(apiKey, TEAMS_QUERY, {});
+  const teams = response.teams?.nodes || [];
+
+  const team = teams.find((t) => t.name.toLowerCase() === teamNameOrId.toLowerCase());
+
+  if (!team) {
+    const availableTeams = teams.map((t) => t.name).join(", ");
+    throw new Error(
+      `Team not found: ${teamNameOrId}\n\n` +
+        `Available teams: ${availableTeams || "(none)"}\n\n` +
+        `Tip: Team names are case-insensitive but must match exactly.`,
+    );
+  }
+
+  return team.id;
+}
+
+/** Resolve state name/type to state UUID (UUID pass-through; else match name or type). */
+async function resolveStateId(apiKey: string, teamId: string, stateNameOrId: string): Promise<string> {
+  if (isUUID(stateNameOrId)) {
+    return stateNameOrId;
+  }
+
+  const response = await linearGraphQL<WorkflowStatesResponse>(apiKey, WORKFLOW_STATES_QUERY, {
+    teamId,
+  });
+
+  const state = response.workflowStates.nodes.find(
+    (s) =>
+      s.name.toLowerCase() === stateNameOrId.toLowerCase() ||
+      s.type.toLowerCase() === stateNameOrId.toLowerCase(),
+  );
+
+  if (!state) {
+    throw new Error(`State not found: ${stateNameOrId}`);
+  }
+
+  return state.id;
+}
+
+/** Resolve assignee ("me"/email/name) to user UUID (UUID pass-through). */
+async function resolveAssigneeId(apiKey: string, assigneeNameOrId: string): Promise<string> {
+  if (assigneeNameOrId.toLowerCase() === "me") {
+    const viewer = await linearGraphQL<ViewerResponse>(apiKey, VIEWER_QUERY, {});
+    return viewer.viewer.id;
+  }
+
+  if (isUUID(assigneeNameOrId)) {
+    return assigneeNameOrId;
+  }
+
+  const FIND_USER_QUERY = `
+    query Users($filter: UserFilter) {
+      users(filter: $filter, first: 1) {
+        nodes {
+          id
+          name
+          email
+          displayName
+          avatarUrl
+          active
+          admin
+          createdAt
+        }
+      }
+    }
+  `;
+
+  const response = await linearGraphQL<UsersResponse>(apiKey, FIND_USER_QUERY, {
+    filter: {
+      or: [
+        { email: { containsIgnoreCase: assigneeNameOrId } },
+        { name: { containsIgnoreCase: assigneeNameOrId } },
+        { displayName: { containsIgnoreCase: assigneeNameOrId } },
+      ],
+    },
+  });
+
+  const users = response.users?.nodes || [];
+
+  if (users.length === 0) {
+    throw new Error(`User not found: ${assigneeNameOrId}`);
+  }
+
+  return users[0].id;
+}
+
+/** Resolve parent issue identifier (e.g. "RT-252") to issue UUID (UUID pass-through). */
+async function resolveParentId(apiKey: string, parentIdentifierOrId: string): Promise<string> {
+  if (isUUID(parentIdentifierOrId)) {
+    return parentIdentifierOrId;
+  }
+
+  const response = await linearGraphQL<IssueResolveResponse>(apiKey, ISSUE_RESOLVE_QUERY, {
+    id: parentIdentifierOrId,
+  });
+
+  if (!response.issue?.id) {
+    throw new Error(`Parent issue not found: ${parentIdentifierOrId}`);
+  }
+
+  return response.issue.id;
+}
+
+/** Resolve project name to project UUID (UUID pass-through; else match name, case-insensitive). */
+async function resolveProjectId(apiKey: string, projectNameOrId: string): Promise<string> {
+  if (isUUID(projectNameOrId)) {
+    return projectNameOrId;
+  }
+
+  const response = await linearGraphQL<ProjectsForResolutionResponse>(
+    apiKey,
+    PROJECTS_FOR_RESOLUTION_QUERY,
+    {},
+  );
+
+  const project = response.projects.nodes.find(
+    (p) => p.name.toLowerCase() === projectNameOrId.toLowerCase(),
+  );
+
+  if (!project) {
+    throw new Error(`Project not found: ${projectNameOrId}`);
+  }
+
+  return project.id;
+}
+
+// ── 1.3 resolveTemplateForProject (inlined from lib/resolve-template.ts) ──────
+
+const TEMPLATES_WITH_DATA_QUERY = `
+  query Templates {
+    templates {
+      id
+      name
+      type
+      templateData
+    }
+  }
+`;
+
+interface TemplatesWithDataResponse {
+  templates?: Array<{
+    id: string;
+    name: string;
+    type?: string | null;
+    templateData?: unknown;
+  }> | null;
+}
+
+interface ParsedTemplateData {
+  projectId?: string;
+  teamId?: string;
+  [key: string]: unknown;
+}
+
+/** Parse templateData field which can be a JSON string or an object. */
+function parseTemplateData(raw: unknown): ParsedTemplateData | null {
+  if (!raw) return null;
+
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as ParsedTemplateData;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof raw === "object") {
+    return raw as ParsedTemplateData;
+  }
+
+  return null;
+}
+
+/** Find the issue template associated with a project (returns template id or undefined). */
+async function resolveTemplateForProject(
+  apiKey: string,
+  projectId: string,
+): Promise<string | undefined> {
+  const response = await linearGraphQL<TemplatesWithDataResponse>(
+    apiKey,
+    TEMPLATES_WITH_DATA_QUERY,
+    {},
+  );
+
+  const templates = response.templates || [];
+
+  for (const template of templates) {
+    if (template.type !== "issue") continue;
+
+    const data = parseTemplateData(template.templateData);
+    if (data?.projectId === projectId) {
+      return template.id;
+    }
+  }
+
+  return undefined;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.get_issue
+// ════════════════════════════════════════════════════════════════════════════
+
+const GET_ISSUE_QUERY = `
+  query Issue($id: String!) {
+    issue(id: $id) {
+      id
+      identifier
+      title
+      description
+      priority
+      priorityLabel
+      estimate
+      state {
+        id
+        name
+        type
+      }
+      assignee {
+        id
+        name
+        email
+      }
+      project {
+        id
+        name
+      }
+      cycle {
+        id
+        name
+      }
+      parent {
+        id
+        identifier
+      }
+      dueDate
+      url
+      branchName
+      createdAt
+      updatedAt
+      attachments {
+        nodes {
+          id
+          title
+          url
+        }
+      }
+    }
+  }
+`;
+
+const getIssueInput = z.object({
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID or identifier (e.g., ENG-1366 or UUID)"),
+  fullDescription: z
+    .boolean()
+    .optional()
+    .describe("Return full description without truncation (default: false, truncates to 500 chars)"),
+});
+
+const getIssueOutput = z.object({
+  id: z.string(),
+  identifier: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  priority: z.number().nullable().optional(),
+  priorityLabel: z.string().optional(),
+  estimate: z.number().nullable().optional(),
+  state: z.object({ id: z.string(), name: z.string(), type: z.string() }).optional(),
+  assignee: z
+    .object({ id: z.string(), name: z.string(), email: z.string() })
+    .nullable()
+    .optional(),
+  project: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  cycle: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  parent: z.object({ id: z.string(), identifier: z.string() }).nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  url: z.string().optional(),
+  branchName: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  attachments: z
+    .array(z.object({ id: z.string(), title: z.string(), url: z.string() }))
+    .optional(),
+  estimatedTokens: z.number(),
+});
+
+type GetIssueInput = z.infer<typeof getIssueInput>;
+type GetIssueOutput = z.infer<typeof getIssueOutput>;
+
+interface IssueResponse {
+  issue: {
+    id: string;
+    identifier: string;
+    title: string;
+    description?: string | null;
+    priority?: number | null;
+    priorityLabel?: string | null;
+    estimate?: number | null;
+    state?: { id: string; name: string; type: string } | null;
+    assignee?: { id: string; name: string; email: string } | null;
+    project?: { id: string; name: string } | null;
+    cycle?: { id: string; name: string } | null;
+    parent?: { id: string; identifier: string } | null;
+    dueDate?: string | null;
+    url?: string;
+    branchName?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    attachments?: { nodes: Array<{ id: string; title: string; url: string }> };
+  } | null;
+}
+
+export const getIssue: ToolDescriptor<GetIssueInput, GetIssueOutput> = {
+  id: "linear.get_issue",
+  name: "Get Linear Issue",
+  description: "Get detailed information about a specific Linear issue",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: getIssueInput,
+  output: getIssueOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+    const fullDescription = args.fullDescription ?? false;
+
+    const response = await linearGraphQL<IssueResponse>(apiKey, GET_ISSUE_QUERY, { id: args.id });
+
+    if (!response.issue) {
+      throw new Error(`Issue not found: ${args.id}`);
+    }
+
+    const issue = response.issue;
+    const baseData = {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      description: fullDescription ? issue.description : issue.description?.substring(0, 500),
+      priority: issue.priority ?? undefined,
+      priorityLabel: issue.priorityLabel || undefined,
+      estimate: issue.estimate ?? undefined,
+      state:
+        issue.state && issue.state.id
+          ? { id: issue.state.id, name: issue.state.name, type: issue.state.type }
+          : undefined,
+      assignee: issue.assignee || undefined,
+      project: issue.project || undefined,
+      cycle: issue.cycle || undefined,
+      parent: issue.parent || undefined,
+      dueDate: issue.dueDate ?? undefined,
+      url: issue.url,
+      branchName: issue.branchName,
+      createdAt: issue.createdAt,
+      updatedAt: issue.updatedAt,
+      attachments: issue.attachments?.nodes?.map((a) => ({
+        id: a.id,
+        title: a.title,
+        url: a.url,
+      })),
+    };
+
+    return getIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.update_issue  (ported before create_issue so create_issue's cycle
+// orchestration can call updateIssue.handler directly — no dynamic import)
+// ════════════════════════════════════════════════════════════════════════════
+
+const GET_ISSUE_TEAM_QUERY = `
+  query IssueTeam($id: String!) {
+    issue(id: $id) {
+      team {
+        id
+      }
+    }
+  }
+`;
+
+const UPDATE_ISSUE_MUTATION = `
+  mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
+    issueUpdate(id: $id, input: $input) {
+      success
+      issue {
+        id
+        identifier
+        title
+        url
+        project {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+const updateIssueInput = z.object({
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID or identifier"),
+  title: safeText("New title").optional(),
+  description: z
+    .string()
+    .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+    .optional()
+    .describe("New description (Markdown)"),
+  assignee: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe('User ID, name, email, or "me"'),
+  state: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("State type, name, or ID"),
+  priority: z.number().min(0).max(4).optional().describe("0=No priority, 1=Urgent, 2=High, 3=Normal, 4=Low"),
+  project: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .nullable()
+    .optional()
+    .describe("Project name or ID (set to null to remove issue from project)"),
+  labels: z
+    .array(
+      z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noCommandInjection, "Invalid characters detected"),
+    )
+    .optional()
+    .describe("Label names or IDs"),
+  dueDate: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .optional()
+    .describe("Due date (ISO format)"),
+  parent: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Parent issue identifier (e.g., RT-252) or ID - resolves to parentId"),
+  parentId: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Parent issue ID for sub-issues"),
+  cycle: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Cycle (sprint) ID to assign issue to"),
+});
+
+const updateIssueOutput = z.object({
+  id: z.string(),
+  identifier: z.string(),
+  title: z.string(),
+  url: z.string(),
+  project: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  estimatedTokens: z.number(),
+});
+
+type UpdateIssueInput = z.infer<typeof updateIssueInput>;
+type UpdateIssueOutput = z.infer<typeof updateIssueOutput>;
+
+interface IssueTeamResponse {
+  issue: { team: { id: string } };
+}
+
+interface IssueUpdateResponse {
+  issueUpdate: {
+    success: boolean;
+    issue?: {
+      id: string;
+      identifier: string;
+      title: string;
+      url: string;
+      project?: { id: string; name: string } | null;
+    };
+  };
+}
+
+export const updateIssue: ToolDescriptor<UpdateIssueInput, UpdateIssueOutput> = {
+  id: "linear.update_issue",
+  name: "Update Linear Issue",
+  description: "Update an existing issue in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: updateIssueInput,
+  output: updateIssueOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+    const { id, ...updateFields } = args;
+
+    // Fetch issue team if state resolution is needed (teamId BEFORE resolveStateId).
+    let teamId: string | undefined;
+    if (updateFields.state) {
+      const teamResponse = await linearGraphQL<IssueTeamResponse>(apiKey, GET_ISSUE_TEAM_QUERY, {
+        id,
+      });
+      teamId = teamResponse.issue.team.id;
+    }
+
+    const mutationInput: {
+      title?: string;
+      description?: string;
+      assigneeId?: string;
+      stateId?: string;
+      priority?: number;
+      projectId?: string | null;
+      labelIds?: string[];
+      dueDate?: string;
+      parentId?: string;
+      cycleId?: string;
+    } = {};
+
+    if (updateFields.title) {
+      mutationInput.title = updateFields.title;
+    }
+    if (updateFields.description) {
+      mutationInput.description = updateFields.description;
+    }
+    if (updateFields.assignee) {
+      mutationInput.assigneeId = await resolveAssigneeId(apiKey, updateFields.assignee);
+    }
+    if (updateFields.state && teamId) {
+      mutationInput.stateId = await resolveStateId(apiKey, teamId, updateFields.state);
+    }
+    if (updateFields.priority !== undefined) {
+      mutationInput.priority = updateFields.priority;
+    }
+    if (updateFields.project !== undefined) {
+      if (updateFields.project === null) {
+        mutationInput.projectId = null;
+      } else {
+        mutationInput.projectId = await resolveProjectId(apiKey, updateFields.project);
+      }
+    }
+    if (updateFields.labels) {
+      mutationInput.labelIds = updateFields.labels;
+    }
+    if (updateFields.dueDate) {
+      mutationInput.dueDate = updateFields.dueDate;
+    }
+    if (updateFields.parent) {
+      mutationInput.parentId = await resolveParentId(apiKey, updateFields.parent);
+    } else if (updateFields.parentId) {
+      mutationInput.parentId = updateFields.parentId;
+    }
+    if (updateFields.cycle) {
+      mutationInput.cycleId = updateFields.cycle;
+    }
+
+    const response = await linearGraphQL<IssueUpdateResponse>(apiKey, UPDATE_ISSUE_MUTATION, {
+      id,
+      input: mutationInput,
+    });
+
+    if (!response.issueUpdate?.success || !response.issueUpdate?.issue) {
+      throw new Error("Failed to update issue");
+    }
+
+    const baseData = {
+      id: response.issueUpdate.issue.id,
+      identifier: response.issueUpdate.issue.identifier,
+      title: response.issueUpdate.issue.title,
+      url: response.issueUpdate.issue.url,
+      project: response.issueUpdate.issue.project || undefined,
+    };
+
+    return updateIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_issue
+// ════════════════════════════════════════════════════════════════════════════
+
+const CREATE_ISSUE_MUTATION = `
+  mutation IssueCreate($input: IssueCreateInput!) {
+    issueCreate(input: $input) {
+      success
+      issue {
+        id
+        identifier
+        title
+        url
+      }
+    }
+  }
+`;
+
+const createIssueInput = z.object({
+  title: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .describe("Issue title"),
+  description: z
+    .string()
+    .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+    .optional()
+    .describe("Issue description (Markdown)"),
+  team: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Team name or ID"),
+  assignee: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe('User ID, name, email, or "me"'),
+  state: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("State type, name, or ID"),
+  priority: z.number().min(0).max(4).optional().describe("0=No priority, 1=Urgent, 2=High, 3=Normal, 4=Low"),
+  project: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Project name or ID"),
+  labels: z
+    .array(
+      z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noCommandInjection, "Invalid characters detected"),
+    )
+    .optional()
+    .describe("Label names or IDs"),
+  dueDate: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .optional()
+    .describe("Due date (ISO format)"),
+  parent: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Parent issue identifier (e.g., RT-252) or ID - resolves to parentId"),
+  parentId: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Parent issue ID for sub-issues"),
+  cycle: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Cycle (sprint) ID or name - will be set via update after creation"),
+  templateId: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Issue template ID to apply"),
+  autoApplyProjectTemplate: z
+    .boolean()
+    .optional()
+    .describe("Automatically find and apply template for the specified project"),
+});
+
+const createIssueOutput = z.object({
+  success: z.boolean(),
+  issue: z.object({
+    id: z.string(),
+    identifier: z.string(),
+    title: z.string(),
+    url: z.string(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type CreateIssueInput = z.infer<typeof createIssueInput>;
+type CreateIssueOutput = z.infer<typeof createIssueOutput>;
+
+interface IssueCreateResponse {
+  issueCreate: {
+    success: boolean;
+    issue?: {
+      id: string;
+      identifier: string;
+      title: string;
+      url: string;
+    };
+  };
+}
+
+export const createIssue: ToolDescriptor<CreateIssueInput, CreateIssueOutput> = {
+  id: "linear.create_issue",
+  name: "Create Linear Issue",
+  description: "Create a new issue in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: createIssueInput,
+  output: createIssueOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const { cycle, templateId, autoApplyProjectTemplate, parent, ...createParams } = args;
+
+    // Resolve template ID if auto-apply is requested (SILENT fallback on failure).
+    let resolvedTemplateId: string | undefined = templateId;
+
+    if (autoApplyProjectTemplate && createParams.project && !resolvedTemplateId) {
+      try {
+        const projectId = await resolveProjectId(apiKey, createParams.project);
+        resolvedTemplateId = await resolveTemplateForProject(apiKey, projectId);
+        // Silent fallback: if no template found, proceed without one.
+      } catch (error) {
+        // Template lookup failed, proceed without template (do not abort the create).
+        console.warn(
+          `Template lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    // Resolve team name to UUID before building mutation input.
+    const teamId = await resolveTeamId(apiKey, createParams.team);
+
+    const mutationInput: {
+      title: string;
+      description?: string;
+      teamId: string;
+      assigneeId?: string;
+      stateId?: string;
+      priority?: number;
+      projectId?: string;
+      labelIds?: string[];
+      dueDate?: string;
+      parentId?: string;
+      templateId?: string;
+    } = {
+      title: createParams.title,
+      teamId,
+    };
+
+    if (createParams.description) {
+      mutationInput.description = createParams.description;
+    }
+    if (createParams.assignee) {
+      mutationInput.assigneeId = await resolveAssigneeId(apiKey, createParams.assignee);
+    }
+    if (createParams.state) {
+      mutationInput.stateId = await resolveStateId(apiKey, teamId, createParams.state);
+    }
+    if (createParams.priority !== undefined) {
+      mutationInput.priority = createParams.priority;
+    }
+    if (createParams.project) {
+      mutationInput.projectId = await resolveProjectId(apiKey, createParams.project);
+    }
+    if (createParams.labels) {
+      mutationInput.labelIds = createParams.labels;
+    }
+    if (createParams.dueDate) {
+      mutationInput.dueDate = createParams.dueDate;
+    }
+    if (parent) {
+      mutationInput.parentId = await resolveParentId(apiKey, parent);
+    } else if (createParams.parentId) {
+      mutationInput.parentId = createParams.parentId;
+    }
+    if (resolvedTemplateId) {
+      mutationInput.templateId = resolvedTemplateId;
+    }
+
+    const response = await linearGraphQL<IssueCreateResponse>(apiKey, CREATE_ISSUE_MUTATION, {
+      input: mutationInput,
+    });
+
+    if (!response.issueCreate?.success) {
+      throw new Error(
+        "Failed to create issue. Check that:\n" +
+          "- Team exists and you have access\n" +
+          "- All required fields are provided (title, team)\n" +
+          "- Optional fields (assignee, state, project) reference valid entities",
+      );
+    }
+
+    if (!response.issueCreate?.issue) {
+      throw new Error("Failed to create issue: No issue returned from API");
+    }
+
+    // If cycle was provided, update the issue to assign it (Linear can't set cycle on create).
+    // Internal call to updateIssue.handler with the SAME ctx — NOT a dynamic import.
+    if (cycle) {
+      try {
+        await updateIssue.handler({ id: response.issueCreate.issue.identifier, cycle }, ctx);
+      } catch (error) {
+        // Issue created successfully but cycle assignment failed: warn, don't fail the operation.
+        console.warn(
+          `Warning: Issue created but cycle assignment failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    const baseData = {
+      success: response.issueCreate.success,
+      issue: {
+        id: response.issueCreate.issue.id,
+        identifier: response.issueCreate.issue.identifier,
+        title: response.issueCreate.issue.title,
+        url: response.issueCreate.issue.url,
+      },
+    };
+
+    return createIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.find_issue  (own multi-step probing; calls getIssue.handler internally)
+// ════════════════════════════════════════════════════════════════════════════
+
+const SEARCH_ISSUES_QUERY = `
+  query Issues($first: Int!, $filter: IssueFilter, $orderBy: PaginationOrderBy) {
+    issues(first: $first, filter: $filter, orderBy: $orderBy) {
+      nodes {
+        id
+        identifier
+        title
+        state {
+          id
+          name
+          type
+        }
+        assignee {
+          name
+        }
+        url
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+interface SearchIssuesResponse {
+  issues: {
+    nodes: Array<{
+      id: string;
+      identifier: string;
+      title: string;
+      state?: { id: string; name: string; type: string } | null;
+      assignee?: { name: string } | null;
+      url?: string;
+    }>;
+    pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+  };
+}
+
+const findIssueInput = z.object({
+  query: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID, identifier, number, or search text"),
+  team: z
+    .string()
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .optional()
+    .describe("Team name to narrow search (optional)"),
+  maxResults: z
+    .number()
+    .min(1)
+    .max(10)
+    .optional()
+    .describe("Max matches to return for disambiguation"),
+});
+
+const issueCandidateSchema = z.object({
+  identifier: z.string(),
+  title: z.string(),
+  state: z.string().optional(),
+  assignee: z.string().optional(),
+  url: z.string().optional(),
+});
+
+const findIssueOutput = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("found"), issue: getIssueOutput }),
+  z.object({
+    status: z.literal("disambiguation_needed"),
+    message: z.string(),
+    query: z.string(),
+    candidates: z.array(issueCandidateSchema),
+    hint: z.string(),
+  }),
+  z.object({
+    status: z.literal("not_found"),
+    message: z.string(),
+    query: z.string(),
+    suggestions: z.array(z.string()),
+  }),
+]);
+
+type FindIssueInput = z.infer<typeof findIssueInput>;
+type FindIssueOutput = z.infer<typeof findIssueOutput>;
+type IssueCandidate = z.infer<typeof issueCandidateSchema>;
+
+const FIND_ISSUE_DEFAULT_MAX_RESULTS = 5;
+
+/** Check if input looks like an issue identifier (ABC-123, number-only, or UUID). */
+function looksLikeIdentifier(input: string): boolean {
+  if (/^[A-Z]+-\d+$/i.test(input)) return true;
+  if (/^\d+$/.test(input)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)) return true;
+  return false;
+}
+
+/** Check if input is number-only (not a full identifier or UUID). */
+function isNumberOnly(input: string): boolean {
+  return /^\d+$/.test(input);
+}
+
+/** Check if an error is critical and should propagate (rate limit / server / timeout). */
+function isCriticalError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes("rate limit") ||
+      msg.includes("server") ||
+      msg.includes("etimedout") ||
+      msg.includes("econnrefused") ||
+      msg.includes("econnreset")
+    );
+  }
+  return false;
+}
+
+/** Try to get an issue by exact ID/identifier via getIssue.handler; null on (non-critical) miss. */
+async function tryExactMatch(
+  id: string,
+  ctx: ExecContext,
+  propagateErrors = false,
+): Promise<GetIssueOutput | null> {
+  try {
+    return await getIssue.handler({ id }, ctx);
+  } catch (error) {
+    if (propagateErrors && isCriticalError(error)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+/** Search for issues matching the query (title/description contains). */
+async function searchIssues(
+  apiKey: string,
+  query: string,
+  team?: string,
+  limit = FIND_ISSUE_DEFAULT_MAX_RESULTS,
+): Promise<IssueCandidate[]> {
+  try {
+    const filter: Record<string, unknown> = {
+      or: [{ title: { contains: query } }, { description: { contains: query } }],
+    };
+
+    if (team) {
+      filter.team = { name: { eq: team } };
+    }
+
+    const response = await linearGraphQL<SearchIssuesResponse>(apiKey, SEARCH_ISSUES_QUERY, {
+      first: limit,
+      filter,
+      orderBy: "updatedAt",
+    });
+
+    return response.issues.nodes.map((issue) => ({
+      identifier: issue.identifier,
+      title: issue.title,
+      state: issue.state?.name,
+      assignee: issue.assignee?.name,
+      url: issue.url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Search for issues whose identifier number contains the supplied number. */
+async function searchByNumber(
+  apiKey: string,
+  numberStr: string,
+  team?: string,
+  limit = FIND_ISSUE_DEFAULT_MAX_RESULTS,
+): Promise<IssueCandidate[]> {
+  try {
+    const filter: Record<string, unknown> = {};
+
+    if (team) {
+      filter.team = { name: { eq: team } };
+    }
+
+    const response = await linearGraphQL<SearchIssuesResponse>(apiKey, SEARCH_ISSUES_QUERY, {
+      first: 50,
+      filter,
+      orderBy: "updatedAt",
+    });
+
+    const matching = response.issues.nodes
+      .filter((issue) => {
+        const identifierNumber = issue.identifier?.split("-")[1];
+        return identifierNumber?.includes(numberStr);
+      })
+      .slice(0, limit);
+
+    return matching.map((issue) => ({
+      identifier: issue.identifier,
+      title: issue.title,
+      state: issue.state?.name,
+      assignee: issue.assignee?.name,
+      url: issue.url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export const findIssue: ToolDescriptor<FindIssueInput, FindIssueOutput> = {
+  id: "linear.find_issue",
+  name: "Find Linear Issue",
+  description: "Smart issue finder - handles partial IDs and searches with disambiguation",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: findIssueInput,
+  output: findIssueOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+    const query = args.query;
+    const team = args.team;
+    const maxResults = args.maxResults ?? FIND_ISSUE_DEFAULT_MAX_RESULTS;
+
+    // Step 1: Handle identifier-like inputs.
+    if (looksLikeIdentifier(query)) {
+      if (isNumberOnly(query)) {
+        // Try with common team prefixes first.
+        const commonPrefixes = ["ENG", "PROD", "DEV"];
+        for (const prefix of commonPrefixes) {
+          const fullId = `${prefix}-${query}`;
+          // First attempt (ENG) propagates critical errors.
+          const match = await tryExactMatch(fullId, ctx, prefix === "ENG");
+          if (match) {
+            return { status: "found", issue: match };
+          }
+        }
+
+        // Search by number if no prefix match.
+        const numberMatches = await searchByNumber(apiKey, query, team, maxResults);
+        if (numberMatches.length === 1) {
+          const fullIssue = await tryExactMatch(numberMatches[0].identifier, ctx);
+          if (fullIssue) {
+            return { status: "found", issue: fullIssue };
+          }
+        } else if (numberMatches.length > 1) {
+          return {
+            status: "disambiguation_needed",
+            message: `Found ${numberMatches.length} issues matching "${query}"`,
+            query,
+            candidates: numberMatches,
+            hint: `Please specify the full identifier (e.g., "${numberMatches[0].identifier}")`,
+          };
+        }
+      } else {
+        // Full identifier or UUID - try exact match first (propagate critical errors).
+        const exactMatch = await tryExactMatch(query, ctx, true);
+        if (exactMatch) {
+          return { status: "found", issue: exactMatch };
+        }
+      }
+    }
+
+    // Step 2: Fall back to text search.
+    const searchResults = await searchIssues(apiKey, query, team, maxResults);
+
+    if (searchResults.length === 0) {
+      return {
+        status: "not_found",
+        message: `No issues found matching "${query}"`,
+        query,
+        suggestions: [
+          "Try a different search term",
+          "Check if the issue exists in a different team",
+          "Use the full issue identifier (e.g., ENG-1234)",
+        ],
+      };
+    }
+
+    if (searchResults.length === 1) {
+      const fullIssue = await tryExactMatch(searchResults[0].identifier, ctx);
+      if (fullIssue) {
+        return { status: "found", issue: fullIssue };
+      }
+    }
+
+    return {
+      status: "disambiguation_needed",
+      message: `Found ${searchResults.length} issues matching "${query}"`,
+      query,
+      candidates: searchResults,
+      hint: `Please specify which issue you want by identifier (e.g., "${searchResults[0].identifier}")`,
+    };
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.archive_issue
+// ════════════════════════════════════════════════════════════════════════════
+
+const ARCHIVE_ISSUE_MUTATION = `
+  mutation IssueArchive($id: String!) {
+    issueArchive(id: $id) {
+      success
+      entity {
+        id
+        identifier
+        archivedAt
+      }
+    }
+  }
+`;
+
+const archiveIssueInput = z.object({
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID or identifier"),
+});
+
+const archiveIssueOutput = z.object({
+  success: z.boolean(),
+  entity: z.object({
+    id: z.string(),
+    identifier: z.string(),
+    archivedAt: z.string(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type ArchiveIssueInput = z.infer<typeof archiveIssueInput>;
+type ArchiveIssueOutput = z.infer<typeof archiveIssueOutput>;
+
+interface IssueArchiveResponse {
+  issueArchive: {
+    success: boolean;
+    entity?: { id: string; identifier: string; archivedAt: string };
+  };
+}
+
+export const archiveIssue: ToolDescriptor<ArchiveIssueInput, ArchiveIssueOutput> = {
+  id: "linear.archive_issue",
+  name: "Archive Linear Issue",
+  description: "Archive an issue in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: archiveIssueInput,
+  output: archiveIssueOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<IssueArchiveResponse>(apiKey, ARCHIVE_ISSUE_MUTATION, {
+      id: args.id,
+    });
+
+    if (!response.issueArchive?.success || !response.issueArchive?.entity) {
+      throw new Error("Failed to archive issue");
+    }
+
+    const baseData = {
+      success: response.issueArchive.success,
+      entity: {
+        id: response.issueArchive.entity.id,
+        identifier: response.issueArchive.entity.identifier,
+        archivedAt: response.issueArchive.entity.archivedAt,
+      },
+    };
+
+    return archiveIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// linear.unarchive_issue
+// ════════════════════════════════════════════════════════════════════════════
+
+const UNARCHIVE_ISSUE_MUTATION = `
+  mutation IssueUnarchive($id: String!) {
+    issueUnarchive(id: $id) {
+      success
+      entity {
+        id
+        identifier
+        archivedAt
+      }
+    }
+  }
+`;
+
+const unarchiveIssueInput = z.object({
+  id: z
+    .string()
+    .min(1)
+    .refine(noControlChars, "Control characters not allowed")
+    .refine(noPathTraversal, "Path traversal not allowed")
+    .refine(noCommandInjection, "Invalid characters detected")
+    .describe("Issue ID or identifier"),
+});
+
+const unarchiveIssueOutput = z.object({
+  success: z.boolean(),
+  entity: z.object({
+    id: z.string(),
+    identifier: z.string(),
+    archivedAt: z.string().nullable(),
+  }),
+  estimatedTokens: z.number(),
+});
+
+type UnarchiveIssueInput = z.infer<typeof unarchiveIssueInput>;
+type UnarchiveIssueOutput = z.infer<typeof unarchiveIssueOutput>;
+
+interface IssueUnarchiveResponse {
+  issueUnarchive: {
+    success: boolean;
+    entity?: { id: string; identifier: string; archivedAt: string | null };
+  };
+}
+
+export const unarchiveIssue: ToolDescriptor<UnarchiveIssueInput, UnarchiveIssueOutput> = {
+  id: "linear.unarchive_issue",
+  name: "Unarchive Linear Issue",
+  description: "Unarchive an issue in Linear",
+  auth: ["LINEAR_API_KEY"],
+  wraps: { type: "rest" },
+  input: unarchiveIssueInput,
+  output: unarchiveIssueOutput,
+  handler: async (args, ctx) => {
+    const apiKey = ctx.secrets.LINEAR_API_KEY;
+
+    const response = await linearGraphQL<IssueUnarchiveResponse>(apiKey, UNARCHIVE_ISSUE_MUTATION, {
+      id: args.id,
+    });
+
+    if (!response.issueUnarchive?.success || !response.issueUnarchive?.entity) {
+      throw new Error("Failed to unarchive issue");
+    }
+
+    const baseData = {
+      success: response.issueUnarchive.success,
+      entity: {
+        id: response.issueUnarchive.entity.id,
+        identifier: response.issueUnarchive.entity.identifier,
+        archivedAt: response.issueUnarchive.entity.archivedAt,
+      },
+    };
+
+    return unarchiveIssueOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+  },
+};
