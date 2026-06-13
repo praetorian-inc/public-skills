@@ -3003,3 +3003,713 @@ export const createComment = {
         return createCommentOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
     },
 };
+// ════════════════════════════════════════════════════════════════════════════
+// Batch 5 — Labels family (list/get/create/update/delete) and Workflow States
+// family (list/get/create/update). Appended below the reviewed Comments block;
+// all prior exports are left byte-identical. Per grep ground truth NONE of these
+// call a resolver: create_label / create_workflow_state accept a RAW teamId
+// (and create_label a raw parentId) exactly as the marketplace sources do.
+// ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_labels
+// ════════════════════════════════════════════════════════════════════════════
+const LIST_LABELS_QUERY = `
+  query IssueLabels($first: Int, $filter: IssueLabelFilter) {
+    issueLabels(first: $first, filter: $filter) {
+      nodes {
+        id
+        name
+        description
+        color
+        isGroup
+        parent { id }
+        team { id }
+      }
+    }
+  }
+`;
+const listLabelsInput = z.object({
+    teamId: safeFilter("Filter by team ID"),
+    limit: z.number().min(1).max(250).optional().describe("Number of results"),
+    includeArchived: z.boolean().optional(),
+});
+const LABELS_DEFAULT_LIMIT = 100;
+const listLabelsOutput = z.object({
+    labels: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        color: z.string(),
+        isGroup: z.boolean().optional(),
+        parentId: z.string().optional(),
+        teamId: z.string().optional(),
+    })),
+    totalLabels: z.number(),
+    estimatedTokens: z.number(),
+});
+export const listLabels = {
+    id: "linear.list_labels",
+    name: "List Linear Labels",
+    description: "List issue labels from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: listLabelsInput,
+    output: listLabelsOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const filter = {};
+        if (args.teamId) {
+            filter.team = { id: { eq: args.teamId } };
+        }
+        const response = await linearGraphQL(apiKey, LIST_LABELS_QUERY, {
+            first: args.limit ?? LABELS_DEFAULT_LIMIT,
+            filter: Object.keys(filter).length ? filter : undefined,
+        });
+        const labels = response.issueLabels?.nodes || [];
+        const baseData = {
+            labels: labels.map((label) => ({
+                id: label.id,
+                name: label.name,
+                description: label.description || undefined,
+                color: label.color,
+                isGroup: label.isGroup,
+                parentId: label.parent?.id,
+                teamId: label.team?.id,
+            })),
+            totalLabels: labels.length,
+        };
+        return listLabelsOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.get_label
+// ════════════════════════════════════════════════════════════════════════════
+const GET_LABEL_QUERY = `
+  query IssueLabel($id: String!) {
+    issueLabel(id: $id) {
+      id
+      name
+      description
+      color
+      isGroup
+      parent { id name }
+      team { id name }
+    }
+  }
+`;
+const getLabelInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Label ID"),
+});
+const getLabelOutput = z.object({
+    label: z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        color: z.string(),
+        isGroup: z.boolean().optional(),
+        parentId: z.string().optional(),
+        parentName: z.string().optional(),
+        teamId: z.string().optional(),
+        teamName: z.string().optional(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const getLabel = {
+    id: "linear.get_label",
+    name: "Get Linear Label",
+    description: "Get a label by ID from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: getLabelInput,
+    output: getLabelOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, GET_LABEL_QUERY, {
+            id: args.id,
+        });
+        if (!response.issueLabel) {
+            throw new Error(`Label not found: ${args.id}`);
+        }
+        const label = response.issueLabel;
+        const baseData = {
+            label: {
+                id: label.id,
+                name: label.name,
+                description: label.description || undefined,
+                color: label.color,
+                isGroup: label.isGroup,
+                parentId: label.parent?.id,
+                parentName: label.parent?.name,
+                teamId: label.team?.id,
+                teamName: label.team?.name,
+            },
+        };
+        return getLabelOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_label  (accepts RAW teamId / parentId — no resolver, per source)
+// ════════════════════════════════════════════════════════════════════════════
+const CREATE_LABEL_MUTATION = `
+  mutation IssueLabelCreate($input: IssueLabelCreateInput!) {
+    issueLabelCreate(input: $input) {
+      success
+      issueLabel {
+        id
+        name
+        color
+      }
+    }
+  }
+`;
+const createLabelInput = z.object({
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .describe("Label name"),
+    color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/, "Must be hex color (e.g., #ff0000)")
+        .optional()
+        .describe("Hex color code"),
+    description: z
+        .string()
+        .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+        .optional()
+        .describe("Label description"),
+    teamId: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe("Team ID to scope label"),
+    parentId: z
+        .string()
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .optional()
+        .describe("Parent label ID for grouping"),
+});
+const createLabelOutput = z.object({
+    success: z.boolean(),
+    label: z.object({
+        id: z.string(),
+        name: z.string(),
+        color: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const createLabel = {
+    id: "linear.create_label",
+    name: "Create Linear Label",
+    description: "Create a new label in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createLabelInput,
+    output: createLabelOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {
+            name: args.name,
+        };
+        if (args.color)
+            mutationInput.color = args.color;
+        if (args.description)
+            mutationInput.description = args.description;
+        if (args.teamId)
+            mutationInput.teamId = args.teamId;
+        if (args.parentId)
+            mutationInput.parentId = args.parentId;
+        const response = await linearGraphQL(apiKey, CREATE_LABEL_MUTATION, {
+            input: mutationInput,
+        });
+        if (!response.issueLabelCreate?.success || !response.issueLabelCreate?.issueLabel) {
+            throw new Error("Failed to create label");
+        }
+        const baseData = {
+            success: response.issueLabelCreate.success,
+            label: {
+                id: response.issueLabelCreate.issueLabel.id,
+                name: response.issueLabelCreate.issueLabel.name,
+                color: response.issueLabelCreate.issueLabel.color,
+            },
+        };
+        return createLabelOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.update_label
+// ════════════════════════════════════════════════════════════════════════════
+const UPDATE_LABEL_MUTATION = `
+  mutation IssueLabelUpdate($id: String!, $input: IssueLabelUpdateInput!) {
+    issueLabelUpdate(id: $id, input: $input) {
+      success
+      issueLabel {
+        id
+        name
+        color
+      }
+    }
+  }
+`;
+const updateLabelInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Label ID"),
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Label name"),
+    color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/, "Must be hex color (e.g., #ff0000)")
+        .optional()
+        .describe("Hex color code"),
+    description: z
+        .string()
+        .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+        .optional()
+        .describe("Label description"),
+});
+const updateLabelOutput = z.object({
+    success: z.boolean(),
+    label: z.object({
+        id: z.string(),
+        name: z.string(),
+        color: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const updateLabel = {
+    id: "linear.update_label",
+    name: "Update Linear Label",
+    description: "Update a label in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: updateLabelInput,
+    output: updateLabelOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {};
+        if (args.name)
+            mutationInput.name = args.name;
+        if (args.color)
+            mutationInput.color = args.color;
+        if (args.description)
+            mutationInput.description = args.description;
+        const response = await linearGraphQL(apiKey, UPDATE_LABEL_MUTATION, {
+            id: args.id,
+            input: mutationInput,
+        });
+        if (!response.issueLabelUpdate?.success || !response.issueLabelUpdate?.issueLabel) {
+            throw new Error("Failed to update label");
+        }
+        const baseData = {
+            success: response.issueLabelUpdate.success,
+            label: {
+                id: response.issueLabelUpdate.issueLabel.id,
+                name: response.issueLabelUpdate.issueLabel.name,
+                color: response.issueLabelUpdate.issueLabel.color,
+            },
+        };
+        return updateLabelOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.delete_label
+// ════════════════════════════════════════════════════════════════════════════
+const DELETE_LABEL_MUTATION = `
+  mutation IssueLabelDelete($id: String!) {
+    issueLabelDelete(id: $id) {
+      success
+    }
+  }
+`;
+const deleteLabelInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Label ID"),
+});
+const deleteLabelOutput = z.object({
+    success: z.boolean(),
+    estimatedTokens: z.number(),
+});
+export const deleteLabel = {
+    id: "linear.delete_label",
+    name: "Delete Linear Label",
+    description: "Delete a label from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: deleteLabelInput,
+    output: deleteLabelOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, DELETE_LABEL_MUTATION, {
+            id: args.id,
+        });
+        if (!response.issueLabelDelete?.success) {
+            throw new Error("Failed to delete label");
+        }
+        const baseData = {
+            success: response.issueLabelDelete.success,
+        };
+        return deleteLabelOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.list_workflow_states
+// ════════════════════════════════════════════════════════════════════════════
+const LIST_WORKFLOW_STATES_QUERY = `
+  query WorkflowStates($first: Int, $filter: WorkflowStateFilter) {
+    workflowStates(first: $first, filter: $filter) {
+      nodes {
+        id
+        name
+        type
+        color
+        position
+        description
+        team {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+const listWorkflowStatesInput = z.object({
+    filter: z
+        .object({
+        teamId: safeFilter("Filter by team ID"),
+    })
+        .optional()
+        .describe("Filter options"),
+    limit: z.number().min(1).max(250).optional().describe("Number of results"),
+});
+const WORKFLOW_STATES_DEFAULT_LIMIT = 100;
+const listWorkflowStatesOutput = z.object({
+    workflowStates: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+        color: z.string(),
+        position: z.number(),
+        description: z.string().optional(),
+        teamId: z.string().optional(),
+        teamName: z.string().optional(),
+    })),
+    totalStates: z.number(),
+    estimatedTokens: z.number(),
+});
+export const listWorkflowStates = {
+    id: "linear.list_workflow_states",
+    name: "List Linear Workflow States",
+    description: "List workflow states from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: listWorkflowStatesInput,
+    output: listWorkflowStatesOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const filter = {};
+        if (args.filter?.teamId) {
+            filter.team = { id: { eq: args.filter.teamId } };
+        }
+        const response = await linearGraphQL(apiKey, LIST_WORKFLOW_STATES_QUERY, {
+            first: args.limit ?? WORKFLOW_STATES_DEFAULT_LIMIT,
+            filter: Object.keys(filter).length ? filter : undefined,
+        });
+        const states = response.workflowStates?.nodes || [];
+        const baseData = {
+            workflowStates: states.map((state) => ({
+                id: state.id,
+                name: state.name,
+                type: state.type,
+                color: state.color,
+                position: state.position,
+                description: state.description || undefined,
+                teamId: state.team?.id,
+                teamName: state.team?.name,
+            })),
+            totalStates: states.length,
+        };
+        return listWorkflowStatesOutput.parse({
+            ...baseData,
+            estimatedTokens: estimateTokens(baseData),
+        });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.get_workflow_state
+// ════════════════════════════════════════════════════════════════════════════
+const GET_WORKFLOW_STATE_QUERY = `
+  query WorkflowState($id: String!) {
+    workflowState(id: $id) {
+      id
+      name
+      type
+      color
+      position
+      description
+      team {
+        id
+        name
+      }
+    }
+  }
+`;
+const getWorkflowStateInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Workflow state ID"),
+});
+const getWorkflowStateOutput = z.object({
+    workflowState: z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+        color: z.string(),
+        position: z.number(),
+        description: z.string().optional(),
+        teamId: z.string().optional(),
+        teamName: z.string().optional(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const getWorkflowState = {
+    id: "linear.get_workflow_state",
+    name: "Get Linear Workflow State",
+    description: "Get a workflow state by ID from Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: getWorkflowStateInput,
+    output: getWorkflowStateOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const response = await linearGraphQL(apiKey, GET_WORKFLOW_STATE_QUERY, {
+            id: args.id,
+        });
+        if (!response.workflowState) {
+            throw new Error(`Workflow state not found: ${args.id}`);
+        }
+        const state = response.workflowState;
+        const baseData = {
+            workflowState: {
+                id: state.id,
+                name: state.name,
+                type: state.type,
+                color: state.color,
+                position: state.position,
+                description: state.description || undefined,
+                teamId: state.team?.id,
+                teamName: state.team?.name,
+            },
+        };
+        return getWorkflowStateOutput.parse({ ...baseData, estimatedTokens: estimateTokens(baseData) });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.create_workflow_state  (accepts RAW teamId — no resolver, per source)
+// ════════════════════════════════════════════════════════════════════════════
+const CREATE_WORKFLOW_STATE_MUTATION = `
+  mutation WorkflowStateCreate($input: WorkflowStateCreateInput!) {
+    workflowStateCreate(input: $input) {
+      success
+      workflowState {
+        id
+        name
+        type
+        color
+      }
+    }
+  }
+`;
+const createWorkflowStateInput = z.object({
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .describe("State name"),
+    type: z.enum(["backlog", "unstarted", "started", "completed", "canceled"]).describe("State type"),
+    teamId: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Team ID to scope state"),
+    color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/, "Must be hex color (e.g., #f2c94c)")
+        .optional()
+        .describe("Hex color code"),
+    position: z.number().min(0).optional().describe("Sort position"),
+    description: z
+        .string()
+        .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+        .optional()
+        .describe("State description"),
+});
+const createWorkflowStateOutput = z.object({
+    success: z.boolean(),
+    workflowState: z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+        color: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const createWorkflowState = {
+    id: "linear.create_workflow_state",
+    name: "Create Linear Workflow State",
+    description: "Create a new workflow state in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: createWorkflowStateInput,
+    output: createWorkflowStateOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {
+            name: args.name,
+            type: args.type,
+            teamId: args.teamId,
+        };
+        if (args.color)
+            mutationInput.color = args.color;
+        if (args.position !== undefined)
+            mutationInput.position = args.position;
+        if (args.description)
+            mutationInput.description = args.description;
+        const response = await linearGraphQL(apiKey, CREATE_WORKFLOW_STATE_MUTATION, { input: mutationInput });
+        if (!response.workflowStateCreate?.success || !response.workflowStateCreate?.workflowState) {
+            throw new Error("Failed to create workflow state");
+        }
+        const baseData = {
+            success: response.workflowStateCreate.success,
+            workflowState: {
+                id: response.workflowStateCreate.workflowState.id,
+                name: response.workflowStateCreate.workflowState.name,
+                type: response.workflowStateCreate.workflowState.type,
+                color: response.workflowStateCreate.workflowState.color,
+            },
+        };
+        return createWorkflowStateOutput.parse({
+            ...baseData,
+            estimatedTokens: estimateTokens(baseData),
+        });
+    },
+};
+// ════════════════════════════════════════════════════════════════════════════
+// linear.update_workflow_state
+// ════════════════════════════════════════════════════════════════════════════
+const UPDATE_WORKFLOW_STATE_MUTATION = `
+  mutation WorkflowStateUpdate($id: String!, $input: WorkflowStateUpdateInput!) {
+    workflowStateUpdate(id: $id, input: $input) {
+      success
+      workflowState {
+        id
+        name
+        type
+        color
+      }
+    }
+  }
+`;
+const updateWorkflowStateInput = z.object({
+    id: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .refine(noPathTraversal, "Path traversal not allowed")
+        .refine(noCommandInjection, "Invalid characters detected")
+        .describe("Workflow state ID"),
+    name: z
+        .string()
+        .min(1)
+        .refine(noControlChars, "Control characters not allowed")
+        .optional()
+        .describe("Updated state name"),
+    color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/, "Must be hex color (e.g., #f2c94c)")
+        .optional()
+        .describe("Updated hex color code"),
+    position: z.number().min(0).optional().describe("Updated sort position"),
+    description: z
+        .string()
+        .refine(noControlCharsAllowWhitespace, "Dangerous control characters not allowed")
+        .optional()
+        .describe("Updated state description"),
+});
+const updateWorkflowStateOutput = z.object({
+    success: z.boolean(),
+    workflowState: z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+        color: z.string(),
+    }),
+    estimatedTokens: z.number(),
+});
+export const updateWorkflowState = {
+    id: "linear.update_workflow_state",
+    name: "Update Linear Workflow State",
+    description: "Update a workflow state in Linear",
+    auth: ["LINEAR_API_KEY"],
+    wraps: { type: "rest" },
+    input: updateWorkflowStateInput,
+    output: updateWorkflowStateOutput,
+    handler: async (args, ctx) => {
+        const apiKey = ctx.secrets.LINEAR_API_KEY;
+        const mutationInput = {};
+        if (args.name)
+            mutationInput.name = args.name;
+        if (args.color)
+            mutationInput.color = args.color;
+        if (args.position !== undefined)
+            mutationInput.position = args.position;
+        if (args.description)
+            mutationInput.description = args.description;
+        const response = await linearGraphQL(apiKey, UPDATE_WORKFLOW_STATE_MUTATION, { id: args.id, input: mutationInput });
+        if (!response.workflowStateUpdate?.success || !response.workflowStateUpdate?.workflowState) {
+            throw new Error("Failed to update workflow state");
+        }
+        const baseData = {
+            success: response.workflowStateUpdate.success,
+            workflowState: {
+                id: response.workflowStateUpdate.workflowState.id,
+                name: response.workflowStateUpdate.workflowState.name,
+                type: response.workflowStateUpdate.workflowState.type,
+                color: response.workflowStateUpdate.workflowState.color,
+            },
+        };
+        return updateWorkflowStateOutput.parse({
+            ...baseData,
+            estimatedTokens: estimateTokens(baseData),
+        });
+    },
+};

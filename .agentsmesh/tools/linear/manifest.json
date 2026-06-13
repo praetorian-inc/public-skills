@@ -423,6 +423,89 @@
       "schemaHash": "ad2bd37a6bf4019554e28db0f30d2dfc5480eddacd5259f0def66e3fb7071a7a"
     },
     {
+      "id": "linear.create_label",
+      "name": "Create Linear Label",
+      "description": "Create a new label in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Label name"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Hex color code"
+          },
+          "description": {
+            "type": "string",
+            "description": "Label description"
+          },
+          "teamId": {
+            "type": "string",
+            "description": "Team ID to scope label"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Parent label ID for grouping"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "label",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createLabel",
+      "schemaHash": "1c1b37af244ec17bb849ba2f10d4e08461cb5eccdd23aa0a9dc8ae4bea898876"
+    },
+    {
       "id": "linear.create_project",
       "name": "Create Linear Project",
       "description": "Create a new project in Linear",
@@ -622,6 +705,153 @@
       },
       "entry": "wrapper.ts#createProjectFromTemplate",
       "schemaHash": "941de8c1fcb6eee6ff3064584daab96786d5d87251045ae4c63d85d22258ba31"
+    },
+    {
+      "id": "linear.create_workflow_state",
+      "name": "Create Linear Workflow State",
+      "description": "Create a new workflow state in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "State name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "backlog",
+              "unstarted",
+              "started",
+              "completed",
+              "canceled"
+            ],
+            "description": "State type"
+          },
+          "teamId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Team ID to scope state"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Hex color code"
+          },
+          "position": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Sort position"
+          },
+          "description": {
+            "type": "string",
+            "description": "State description"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "teamId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "workflowState": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type",
+              "color"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "workflowState",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#createWorkflowState",
+      "schemaHash": "30881e8bb39b234ebc5822aeb5ecac74aefb541b7f0e28abb42c7f0cae1fe376"
+    },
+    {
+      "id": "linear.delete_label",
+      "name": "Delete Linear Label",
+      "description": "Delete a label from Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Label ID"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#deleteLabel",
+      "schemaHash": "5c62bc45b28bc6b4732eb7f73182510d1046d42e4aefcbd205dde2fcdcf57177"
     },
     {
       "id": "linear.delete_project",
@@ -1390,6 +1620,86 @@
       "schemaHash": "dbf8d17240252d639dd605bcfb60ee78ddbcec165ebc418b6524602441eed48a"
     },
     {
+      "id": "linear.get_label",
+      "name": "Get Linear Label",
+      "description": "Get a label by ID from Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Label ID"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              },
+              "isGroup": {
+                "type": "boolean"
+              },
+              "parentId": {
+                "type": "string"
+              },
+              "parentName": {
+                "type": "string"
+              },
+              "teamId": {
+                "type": "string"
+              },
+              "teamName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getLabel",
+      "schemaHash": "99bd62be525899753b4e01294850d0aba4a9563288fd3c3de56c83ba4aced894"
+    },
+    {
       "id": "linear.get_project",
       "name": "Get Linear Project",
       "description": "Get detailed information about a specific Linear project",
@@ -1671,6 +1981,85 @@
       },
       "entry": "wrapper.ts#getTemplate",
       "schemaHash": "66d3116a0f7fe4aff95ce218ab037f50b0f6d7a1084bb636a632d28022c5c89f"
+    },
+    {
+      "id": "linear.get_workflow_state",
+      "name": "Get Linear Workflow State",
+      "description": "Get a workflow state by ID from Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Workflow state ID"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "workflowState": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              },
+              "position": {
+                "type": "number"
+              },
+              "description": {
+                "type": "string"
+              },
+              "teamId": {
+                "type": "string"
+              },
+              "teamName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type",
+              "color",
+              "position"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "workflowState",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getWorkflowState",
+      "schemaHash": "dfaf6ace80199b8841b1ba27f1e49a458224d3cde8bae594f3bf10f2139cf27c"
     },
     {
       "id": "linear.list_comments",
@@ -2090,6 +2479,92 @@
       },
       "entry": "wrapper.ts#listIssues",
       "schemaHash": "d5f62a1c2cba9aada2ecd8ca85166efd8f3681d95e211bd3875deca29f042716"
+    },
+    {
+      "id": "linear.list_labels",
+      "name": "List Linear Labels",
+      "description": "List issue labels from Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string",
+            "description": "Filter by team ID"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 250,
+            "description": "Number of results"
+          },
+          "includeArchived": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "isGroup": {
+                  "type": "boolean"
+                },
+                "parentId": {
+                  "type": "string"
+                },
+                "teamId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "color"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalLabels": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "labels",
+          "totalLabels",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listLabels",
+      "schemaHash": "e4226956ad040801a79e4b7456a0a954038b4b09bd3896ba849ebfb0392ba914"
     },
     {
       "id": "linear.list_project_templates",
@@ -2559,6 +3034,101 @@
       "schemaHash": "d0b24aaa0ae69c9737b4fd2154960c0a7f61b8d95fc46f1bb099ca13bcbc380c"
     },
     {
+      "id": "linear.list_workflow_states",
+      "name": "List Linear Workflow States",
+      "description": "List workflow states from Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "object",
+            "properties": {
+              "teamId": {
+                "type": "string",
+                "description": "Filter by team ID"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Filter options"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 250,
+            "description": "Number of results"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "workflowStates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "number"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "teamName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "color",
+                "position"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalStates": {
+            "type": "number"
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "workflowStates",
+          "totalStates",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#listWorkflowStates",
+      "schemaHash": "b7b1a45a8435afb9ba1d190bf48870eb37626e66cea058f2078d78aed7ca8b9f"
+    },
+    {
       "id": "linear.unarchive_issue",
       "name": "Unarchive Linear Issue",
       "description": "Unarchive an issue in Linear",
@@ -2853,6 +3423,86 @@
       "schemaHash": "2f7cec3a0626c0e11ff31e7b1b051fd2fbe4bab708aa4cccd42ed4fce72fd141"
     },
     {
+      "id": "linear.update_label",
+      "name": "Update Linear Label",
+      "description": "Update a label in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Label ID"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Label name"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Hex color code"
+          },
+          "description": {
+            "type": "string",
+            "description": "Label description"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "label",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateLabel",
+      "schemaHash": "1732a87787447acbef5d910adc06d91e8f591dad49c6ea2698958e661fad6afd"
+    },
+    {
       "id": "linear.update_project",
       "name": "Update Linear Project",
       "description": "Update an existing project in Linear",
@@ -2958,6 +3608,95 @@
       },
       "entry": "wrapper.ts#updateProject",
       "schemaHash": "640976cc049425041d575ab0241586108b8785eda26b18062044434e44f34568"
+    },
+    {
+      "id": "linear.update_workflow_state",
+      "name": "Update Linear Workflow State",
+      "description": "Update a workflow state in Linear",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Workflow state ID"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Updated state name"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Updated hex color code"
+          },
+          "position": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Updated sort position"
+          },
+          "description": {
+            "type": "string",
+            "description": "Updated state description"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "workflowState": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type",
+              "color"
+            ],
+            "additionalProperties": false
+          },
+          "estimatedTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "workflowState",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "LINEAR_API_KEY"
+      ],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#updateWorkflowState",
+      "schemaHash": "8fa6d6bf9cdf28e6427723c78f083435a5dd357ef216adf98e292d1bdfec22dc"
     }
   ]
 }
