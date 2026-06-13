@@ -6,6 +6,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildIndex } from "../src/catalog/catalog-index.js";
 import { rankerFromConfig } from "../src/ranker/factory.js";
 import { EnvProvider } from "../src/secrets/env-provider.js";
+import { Sandbox } from "../src/sandbox/sandbox.js";
 import { createServer } from "../src/server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +24,13 @@ beforeAll(async () => {
   const index = buildIndex(catalogRoot);
   const ranker = rankerFromConfig({ ranker: "keyword" });
   await ranker.index(index);
-  const server = createServer({ index, ranker, secrets: new EnvProvider() });
+  const sandbox = new Sandbox({ index, secrets: new EnvProvider() });
+  const server = createServer({
+    index,
+    ranker,
+    secrets: new EnvProvider(),
+    runCode: (source) => sandbox.run(source),
+  });
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: "test-client", version: "0.0.1" });
@@ -31,10 +38,16 @@ beforeAll(async () => {
 });
 
 describe("MCP round-trip", () => {
-  it("exposes exactly the 4 gateway tools", async () => {
+  it("exposes exactly the 5 gateway tools", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
-    expect(names).toEqual(["execute", "get_schema", "resolve_skill", "search_capabilities"]);
+    expect(names).toEqual([
+      "execute",
+      "get_schema",
+      "resolve_skill",
+      "run_code",
+      "search_capabilities",
+    ]);
   });
 
   it("drives the skill path: search → get_schema → resolve_skill", async () => {

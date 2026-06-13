@@ -123,7 +123,13 @@ describe("HIGH-2: invalid_output via executeTool", () => {
   it("returns invalid_output over MCP round-trip (InMemoryTransport)", async () => {
     const ranker = rankerFromConfig({ ranker: "keyword" });
     await ranker.index(index);
-    const server = createServer({ index, ranker, secrets: new EnvProvider() });
+    const server = createServer({
+      index,
+      ranker,
+      secrets: new EnvProvider(),
+      // This test exercises only `execute`; run_code is unused here.
+      runCode: async () => undefined,
+    });
     const [ct, st] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test-invalid-output", version: "0.0.1" });
     await Promise.all([server.connect(st), client.connect(ct)]);

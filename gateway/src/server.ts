@@ -1,6 +1,6 @@
 /**
- * Build the MCP server exposing EXACTLY the 4 capability-gateway meta-tools:
- * `search_capabilities`, `get_schema`, `resolve_skill`, `execute`.
+ * Build the MCP server exposing EXACTLY the 5 capability-gateway meta-tools:
+ * `search_capabilities`, `get_schema`, `resolve_skill`, `execute`, `run_code`.
  *
  * Each tool's body runs through {@link toToolError} so the MCP layer never sees
  * a raw throw — every failure becomes a structured `{isError, content}` result
@@ -22,12 +22,15 @@ import { searchCapabilities } from "./handlers/search-capabilities.js";
 import { getSchema } from "./handlers/get-schema.js";
 import { resolveSkill } from "./handlers/resolve-skill.js";
 import { execute } from "./handlers/execute.js";
+import { runCode } from "./handlers/run-code.js";
 
 /** Everything the meta-tools need, injected for testability. */
 export interface ServerDeps {
   index: CatalogEntry[];
   ranker: Ranker;
   secrets: SecretProvider;
+  /** Run model source in the V8 sandbox; returns ONLY the program's value. */
+  runCode: (source: string) => Promise<unknown>;
 }
 
 /** Wrap a successful JSON payload as an MCP text-content result. */
@@ -45,7 +48,7 @@ async function guarded(produce: () => Promise<unknown>): Promise<CallToolResult>
 }
 
 /**
- * Create the gateway {@link McpServer} with the 4 meta-tools registered.
+ * Create the gateway {@link McpServer} with the 5 meta-tools registered.
  *
  * @returns the server; the caller connects a transport.
  */
@@ -109,6 +112,18 @@ export function createServer(deps: ServerDeps): McpServer {
           { index: deps.index, secrets: deps.secrets },
         ),
       ),
+  );
+
+  server.registerTool(
+    "run_code",
+    {
+      description:
+        "Run a model-written JS program in a sandboxed V8 isolate (no network, no fs, no Node APIs). The only egress is calling capabilities via the in-isolate `caps.<service>.<tool>(args)` accessor — those run host-side through `execute`, keeping intermediate data in the isolate. Returns ONLY the program's return value.",
+      inputSchema: {
+        source: z.string(),
+      },
+    },
+    (args) => guarded(() => runCode({ source: args.source }, { sandbox: { run: deps.runCode } })),
   );
 
   return server;

@@ -13,7 +13,7 @@
  *   3. Boot `node dist/index.js <config>` over stdio.
  *   4. Drive MCP JSON-RPC over stdio:
  *      a. initialize handshake
- *      b. tools/list → exactly the 4 meta-tools
+ *      b. tools/list → exactly the 5 meta-tools
  *      c. tools/call execute → success (not an error)
  *      d. search_capabilities → indexes the entry
  *   5. Kill the process and verify stdout is pure JSON-RPC.
@@ -208,7 +208,7 @@ async function driveServer(
 const IT_TIMEOUT = 30_000; // ms — these tests boot a real Node subprocess
 
 describe("SF-1: compiled gateway loads a plain .js wrapper over stdio", () => {
-  it("boots, indexes the js wrapper, and exposes exactly the 4 meta-tools", async () => {
+  it("boots, indexes the js wrapper, and exposes exactly the 5 meta-tools", async () => {
     // Send initialize + tools/list; expect 2 responses.
     const responses = await driveServer(
       [
@@ -240,7 +240,13 @@ describe("SF-1: compiled gateway loads a plain .js wrapper over stdio", () => {
     )
       .map((t) => t.name)
       .sort();
-    expect(toolNames).toEqual(["execute", "get_schema", "resolve_skill", "search_capabilities"]);
+    expect(toolNames).toEqual([
+      "execute",
+      "get_schema",
+      "resolve_skill",
+      "run_code",
+      "search_capabilities",
+    ]);
   }, IT_TIMEOUT);
 
   it("executes the plain .js tool successfully over stdio", async () => {

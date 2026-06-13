@@ -20,6 +20,7 @@ import { buildIndex } from "./catalog/catalog-index.js";
 import { assertNoDrift } from "./execute/drift.js";
 import { rankerFromConfig } from "./ranker/factory.js";
 import { secretsFromConfig } from "./secrets/factory.js";
+import { Sandbox } from "./sandbox/sandbox.js";
 import { createServer } from "./server.js";
 
 function configPath(): string {
@@ -41,7 +42,16 @@ async function main(): Promise<void> {
 
   const secrets = secretsFromConfig(config.secrets);
 
-  const server = createServer({ index, ranker, secrets });
+  // The sandbox builds its capability bridge from the SAME index + secrets the
+  // `execute` path uses; isolated-vm is lazy-imported on first run_code call.
+  const sandbox = new Sandbox({ index, secrets });
+
+  const server = createServer({
+    index,
+    ranker,
+    secrets,
+    runCode: (source) => sandbox.run(source),
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("[capability-gateway] listening on stdio");
