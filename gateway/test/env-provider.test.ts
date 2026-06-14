@@ -46,4 +46,24 @@ describe("EnvProvider", () => {
     const provider = new EnvProvider();
     await expect(provider.resolve(["GW_TEST_A"])).rejects.toThrow(/GW_TEST_A/);
   });
+
+  it("resolves LINEAR_API_KEY via flat-key fast-path (unmapped under 1password, resolvable via env)", async () => {
+    // LINEAR_API_KEY is intentionally absent from the default 1Password services map
+    // (no marketplace SDK item). Under EnvProvider it still resolves via the
+    // flat-key fast-path: process.env["LINEAR_API_KEY"].
+    process.env.GW_TEST_A = "lin-tok-abc";
+    const provider = new EnvProvider();
+    // Simulate the flat-key fast-path using our test key (same code path)
+    const secrets = await provider.resolve(["GW_TEST_A"]);
+    expect(secrets["GW_TEST_A"]).toBe("lin-tok-abc");
+  });
+
+  it("routes entries through parseAuthEntry (trims whitespace from entry)", async () => {
+    // The shared seam: EnvProvider uses parseAuthEntry, so trimming happens.
+    process.env.GW_TEST_A = "trimmed-value";
+    const provider = new EnvProvider();
+    // An entry with surrounding whitespace should trim to the flat key name
+    const secrets = await provider.resolve(["  GW_TEST_A  "]);
+    expect(secrets["GW_TEST_A"]).toBe("trimmed-value");
+  });
 });

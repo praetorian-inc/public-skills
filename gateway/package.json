@@ -24,7 +24,8 @@
     "url": "https://github.com/praetorian-inc/public-skills/issues"
   },
   "bin": {
-    "capability-gateway": "./dist/index.js"
+    "capability-gateway": "./dist/index.js",
+    "capability-gateway-auth": "./dist/bin/auth.js"
   },
   "exports": {
     ".": "./dist/index.js"
