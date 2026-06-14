@@ -1,0 +1,198 @@
+{
+  "manifestVersion": 1,
+  "service": "context7",
+  "tools": [
+    {
+      "id": "context7.get-library-docs",
+      "name": "Context7 Get Library Docs",
+      "description": "Fetch up-to-date documentation for a Context7 library ID (keyless; optional CONTEXT7_API_KEY raises rate limits).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "context7CompatibleLibraryID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "description": "Context7 library ID from resolve-library-id (format: /owner/repo)"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "code",
+              "info"
+            ],
+            "description": "Documentation mode: \"code\" (default) for API/code, \"info\" for conceptual guides"
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Topic to focus documentation on"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Page number for pagination"
+          }
+        },
+        "required": [
+          "context7CompatibleLibraryID"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "libraryName": {
+            "type": "string",
+            "description": "Library name derived from libraryId"
+          },
+          "libraryId": {
+            "type": "string",
+            "description": "Context7 library ID"
+          },
+          "content": {
+            "type": "string",
+            "description": "Documentation content"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "description": "ISO timestamp when docs were fetched"
+          },
+          "version": {
+            "type": "string",
+            "description": "Library version if detected"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "code",
+              "info"
+            ],
+            "description": "Documentation mode used"
+          },
+          "topic": {
+            "type": "string",
+            "description": "Topic filter applied"
+          },
+          "page": {
+            "type": "number",
+            "description": "Page number"
+          },
+          "estimatedTokens": {
+            "type": "number",
+            "description": "Estimated token count"
+          }
+        },
+        "required": [
+          "libraryName",
+          "libraryId",
+          "content",
+          "fetchedAt",
+          "mode",
+          "page",
+          "estimatedTokens"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#getLibraryDocs",
+      "schemaHash": "00901caff96e77191aebe4a4a3870db0cc9637f42290a96fac582221402caec4"
+    },
+    {
+      "id": "context7.resolve-library-id",
+      "name": "Context7 Resolve Library ID",
+      "description": "Resolve a library name to Context7-compatible library IDs (keyless; optional CONTEXT7_API_KEY raises rate limits).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "libraryName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Name of the library to search for (e.g., \"react\", \"lodash\")"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "User question/task for ranking results by relevance"
+          }
+        },
+        "required": [
+          "libraryName"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "libraries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "codeSnippets": {
+                  "type": "number"
+                },
+                "sourceReputation": {
+                  "type": "string",
+                  "enum": [
+                    "High",
+                    "Medium",
+                    "Low",
+                    "Unknown"
+                  ]
+                },
+                "benchmarkScore": {
+                  "type": "number"
+                },
+                "versions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "libraries",
+          "totalResults"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [],
+      "wraps": {
+        "type": "rest"
+      },
+      "entry": "wrapper.ts#resolveLibraryId",
+      "schemaHash": "78a380fe0048a5b1ea56cd267ab6d7420bb4d138bfcec4948a3d42d33337d432"
+    }
+  ]
+}

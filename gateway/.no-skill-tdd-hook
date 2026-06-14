@@ -1,0 +1,10 @@
+This marker scopes OUT the Claude-session skill-TDD enforcement hook for the
+gateway package ONLY. The SKILL.md files under test/fixtures/.agentsmesh/ are
+hermetic test assets for the capability gateway — not managed canonical skills.
+
+The repo's REAL canonical skills live at the repository root under
+.agentsmesh/skills/ and remain fully TDD-protected (this marker does not cover
+them; the hook walks UP from an edited file, and this marker is below the root).
+
+Canonical skill authoring is still gated by skill-manager + the agentsmesh
+CI check (`agentsmesh generate --check`).

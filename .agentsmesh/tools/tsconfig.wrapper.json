@@ -1,0 +1,16 @@
+{
+  "//": "Per-tool wrapper compile config (SF-1). Compiles catalog `wrapper.ts` files in place to `wrapper.js` so bare Node (node dist/index.js — no TS loader) can serve them. The gateway's main tsconfig only builds `src/`, so catalog wrappers need this separate step. The `ToolDescriptor` import is type-only and erases. Run from the gateway dir: `node_modules/.bin/tsc -p ../.agentsmesh/tools/tsconfig.wrapper.json`.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": []
+  },
+  "include": ["*/wrapper.ts"]
+}

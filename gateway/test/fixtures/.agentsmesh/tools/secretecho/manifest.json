@@ -1,0 +1,46 @@
+{
+  "manifestVersion": 1,
+  "service": "secretecho",
+  "tools": [
+    {
+      "id": "secretecho.secretecho",
+      "name": "secretecho",
+      "description": "Echo text; reports (boolean only) whether TEST_SECRET resolved host-side.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "secretSeen": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text",
+          "secretSeen"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "auth": [
+        "TEST_SECRET"
+      ],
+      "entry": "wrapper.ts#secretEcho",
+      "schemaHash": "9e7c8643ac4e41970f75c7d836df502c3ef6e0aab56b9780388f7bc6e4b8e40f"
+    }
+  ]
+}

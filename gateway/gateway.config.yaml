@@ -1,0 +1,8 @@
+# Capability Gateway configuration (P0).
+# Points the gateway at an agentsmesh catalog and selects pluggable strategies.
+catalog:
+  root: ../.agentsmesh        # expects skills/ and tools/ under here
+search:
+  ranker: keyword            # keyword | semantic | hybrid  (P0 implements keyword)
+secrets:
+  provider: env              # env (P0) | 1password (P1)
